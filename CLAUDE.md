@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 阅读Max (legado_Plus) — an Android e-book reader app forked from Legado. Supports custom book sources with user-defined rules (Jsoup selectors + Rhino JS), RSS subscriptions, local TXT/EPUB reading, and an embedded HTTP/WebSocket server for remote control.
 
+## 本文件定位
+
+CLAUDE.md 是项目级稳定契约，不是状态记录。只收录：固定规则、项目定位与架构、代码约定、构建/发布/验收规则。禁止写入：当前进度、临时风险、逐次日志、待办清单、个人备注——这些状态分别归 issue 追踪、CHANGELOG 与 git 历史；需要过程性说明时写到 `docs/` 对应目录，不要追加到这里。
+
 ## Build Commands
 
 Gradle wrapper（Windows 下 `gradlew.bat`），JDK 17。常用命令（完整矩阵与解释见 [docs/project-rules/build-commands.md](docs/project-rules/build-commands.md)）：

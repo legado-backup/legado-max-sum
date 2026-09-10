@@ -5,7 +5,7 @@
 ## 来源与背景
 
 - 这批技能来自 [obra/superpowers](https://github.com/obra/superpowers) 一键安装产物（含 brainstorming、writing-plans、executing-plans、subagent-driven-development、using-git-worktrees 等），以及少量当时为本项目定制的 `legado-*` 技能（如 Android 崩溃调试、中文文档/Git 规范等）。
-- 仓库当时的配套决策（`docs/superpowers/`、`docs/archive/superpowers/`）与之一并归档或已清理。
+- 仓库当时的配套决策（`docs/superpowers/`、`docs/archive/superpowers/`）中的计划与规格文档仍保留在原处，未随本次迁移处理；如不再需要请另行评估归档。
 
 ## 归档原因
 

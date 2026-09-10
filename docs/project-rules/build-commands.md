@@ -29,6 +29,7 @@ Gradle wrapper（Windows 下为 `gradlew.bat`），JDK 17 要求。
 ### Kotlin 代码格式（spotless + ktlint）
 
 - 配置位于根 `build.gradle` 的 `spotless {}` 块；`ratchetFrom 'origin/main'` 使检查只覆盖**自 origin/main 以来的改动**，存量代码不强制全量合规。
+- **前提**：本地首次使用前需先 `git fetch origin main`（让 `origin/main` ref 存在），否则 `spotlessCheck` 会因找不到基线而报错；CI 通过 `fetch-depth: 0` 满足该前提。
 - 与存量惯例冲突的风格类规则已在配置中关闭：函数/属性命名（Compose 大写组件名、驼峰常量）、import 字母序、行宽（暂放开）。需要调整时改根 build.gradle 的 `editorConfigOverride`。
 - Kotlin 格式化由 spotless 负责；`prettier`（node）只处理 `js/ts/vue/md`，**不碰 `.java` 与 `.kt`**。
 

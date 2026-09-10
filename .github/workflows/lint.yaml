@@ -43,6 +43,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      - name: Setup Node (commitlint)
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - name: Install JS deps (commitlint)
+        # commitlint 依赖在 package-lock.json 里，CI 无本地 node_modules，需先安装
+        run: npm ci --ignore-scripts
+
       - name: Check Commit Messages
         # 校验本次提交是否符合 Conventional Commits（本地 commit-msg 钩子的 CI 兜底）
         run: |

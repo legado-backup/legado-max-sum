@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -11,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +40,7 @@ import io.legado.app.ui.theme.pageTopBarColors
  * @param backContentDescription 返回键无障碍描述（默认"返回"）
  * @param containerColor 容器色（默认透明；背景统一由 [pageTopBarBackground] 承载，仅连体场景可覆写）
  * @param showBackground true（默认）时由组件自身承载完整背景（阴影/圆角/壁纸）；false 时交由外层容器承载（连体场景）
+ * @param scrollBehavior 滚动收起行为（默认 null；需要上滑收起/隐藏顶栏时传入 enterAlwaysScrollBehavior() 等）
  * @param actions 右侧操作区
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +54,7 @@ fun AppPageTopBar(
     backContentDescription: String? = null,
     containerColor: Color = Color.Transparent,
     showBackground: Boolean = true,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     val colors = pageTopBarColors()
@@ -68,6 +72,7 @@ fun AppPageTopBar(
             titleContentColor = colors.contentColor,
             actionIconContentColor = colors.contentColor
         ),
+        scrollBehavior = scrollBehavior,
         title = {
             Column {
                 Text(
@@ -107,6 +112,25 @@ private fun AppPageTopBarPreview() {
             title = "存储管理",
             subtitle = "共 5 项缓存 · 128.5 MB",
             onBackClick = {}
+        )
+    }
+}
+
+@Preview(name = "With actions", showBackground = true)
+@Composable
+private fun AppPageTopBarWithActionsPreview() {
+    MaterialTheme {
+        AppPageTopBar(
+            title = "存储管理",
+            onBackClick = {},
+            actions = {
+                IconButton(onClick = {}) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = null
+                    )
+                }
+            }
         )
     }
 }

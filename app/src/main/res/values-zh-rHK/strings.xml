@@ -184,6 +184,7 @@
     <string name="book_file_selector">添加書輯</string>
     <string name="scan_book_source">掃描</string>
     <string name="copy_source">拷貝源</string>
+    <string name="paste">貼上</string>
     <string name="paste_source">粘帖源</string>
     <string name="source_rule_s">源規則説明</string>
     <string name="check_update">檢查更新</string>

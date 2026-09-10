@@ -204,6 +204,7 @@
     <string name="book_file_selector">Add books</string>
     <string name="scan_book_source">Scan</string>
     <string name="copy_source">Copy source</string>
+    <string name="paste">Paste</string>
     <string name="paste_source">Paste source</string>
     <string name="source_rule_s">Source rules description</string>
     <string name="check_update">Check for Updates</string>

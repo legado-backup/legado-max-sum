@@ -2,6 +2,7 @@ package io.legado.app.ui.config.widget
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import io.legado.app.ui.widget.components.AppPageTopBar
@@ -21,6 +22,7 @@ import io.legado.app.ui.widget.components.AppScaffold
  * @param bottomBar 底部栏插槽（通常为多选模式下的操作栏）
  * @param content 主内容区域
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfigManageScaffold(
     title: String,

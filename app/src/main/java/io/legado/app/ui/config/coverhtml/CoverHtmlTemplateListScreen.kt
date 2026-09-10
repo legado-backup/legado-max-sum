@@ -35,6 +35,7 @@ import io.legado.app.utils.toastOnUi
  * @param onBackClick 返回点击回调
  * @param onEditTemplate 编辑模板回调，参数为模板对象，为空表示新建
  */
+@Suppress("LegadoUiViolation")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoverHtmlTemplateListScreen(
@@ -58,6 +59,8 @@ fun CoverHtmlTemplateListScreen(
     
     AppScaffold(
         topBar = {
+            // TODO(连体顶栏): 容器色为 coverHtmlTopBarContainerColor 且用 onSurface/Bold，
+            // 与 AppPageTopBar 的 pageTopBarColors 契约不符；待共享组件支持连体色调后迁移
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = topBarColor,

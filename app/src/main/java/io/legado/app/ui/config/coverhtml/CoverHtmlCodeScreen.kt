@@ -57,6 +57,7 @@ import kotlinx.coroutines.withContext
  * @param onBackClick 返回点击回调
  * @param onShowTemplateList 显示模板列表回调
  */
+@Suppress("LegadoUiViolation")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoverHtmlCodeScreen(
@@ -214,6 +215,8 @@ fun CoverHtmlCodeScreen(
     //region UI布局
     AppScaffold(
         topBar = {
+            // TODO(连体容器色): 顶栏容器色源为 coverHtmlTopBarContainerColor 且用 onSurface/Bold，
+            // 与 pageTopBarColors 契约不符；待 AppPageTopBar 支持连体色调参数后迁移
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = topBarColor,

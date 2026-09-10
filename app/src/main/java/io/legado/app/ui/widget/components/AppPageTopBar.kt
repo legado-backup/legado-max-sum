@@ -108,6 +108,7 @@ fun AppPageTopBar(
 // ── 预览（§10.1 强制）────────────────────────────────────────
 
 @Preview(showBackground = true)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppPageTopBarPreview() {
     MaterialTheme {
@@ -120,6 +121,7 @@ private fun AppPageTopBarPreview() {
 }
 
 @Preview(name = "With actions", showBackground = true)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppPageTopBarWithActionsPreview() {
     MaterialTheme {

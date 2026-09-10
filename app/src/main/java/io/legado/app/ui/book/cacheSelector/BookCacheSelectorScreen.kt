@@ -55,6 +55,7 @@ import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.navigationBarBottomInset
 import io.legado.app.utils.ConvertUtils
 
+@Suppress("LegadoUiViolation")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookCacheSelectorScreen(
@@ -82,6 +83,8 @@ fun BookCacheSelectorScreen(
 
     AppScaffold(
         topBar = {
+            // TODO(连体顶栏): 容器色为 pageCardContainerColor 且内容色用 onSurface，
+            // 与 AppPageTopBar 的 pageTopBarColors 契约不符；待共享组件支持连体色调参数后迁移
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = topBarColor,

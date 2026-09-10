@@ -8,59 +8,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
-Uses Gradle wrapper (`gradlew.bat` on Windows). JDK 17 required.
+Gradle wrapper（Windows 下 `gradlew.bat`），JDK 17。常用命令（完整矩阵与解释见 [docs/project-rules/build-commands.md](docs/project-rules/build-commands.md)）：
 
 ```bash
-# Debug build (default flavor: appMax)
-./gradlew assembleDebug
-
-# Release build (ProGuard + resource shrinking enabled)
-./gradlew assembleRelease
-
-# Specific flavor builds
-./gradlew assembleAppMaxDebug       # appMax (io.legado.app.yuedu, coexistence)
-./gradlew assembleAppLegacyRelease  # appLegacy (io.legado.app, same as original)
-./gradlew assembleAppSDebug         # appS (io.legado.app.yuedu.a)
-
-# Install to device
-./gradlew installDebug
-./gradlew installAppMaxDebug
-
-# Tests
-./gradlew test                      # Unit tests
-./gradlew connectedAndroidTest      # Instrumented tests
-
-# stop
-./gradlew stop
-
-# Grammar Test
-./gradlew.bat :app:compileAppMaxDebugKotlin
-
-# Lint
-./gradlew lint
-
-# Download Cronet native libs (required before first build)
-./gradlew app:downloadCronet
-
-# 查看DSL语法警告
-# Windows
-gradlew assembleDebug --warning-mode all
-# Mac/Linux
-./gradlew assembleDebug --warning-mode all
+./gradlew assembleDebug            # Debug 构建（默认 flavor：appMax）
+./gradlew installAppMaxDebug       # 安装到设备
+./gradlew test                     # 单元测试
+./gradlew lint                     # Lint（CI 中也有 lint.yaml，通过视为完成的一部分）
+./gradlew app:downloadCronet       # 首次构建前必须跑，下载 Cronet 原生库
+./gradlew assembleDebug --warning-mode all   # 查看 DSL 语法警告
 ```
 
-### Web Frontend (modules/web)
-
-The embedded HTTP server's frontend is a Vue 3 + Vite app in `modules/web/`. It builds to `app/src/main/assets/web/vue/`.
-
-```bash
-cd modules/web
-pnpm install        # requires Node >= 20, pnpm >= 9
-pnpm dev            # local dev server with HMR
-pnpm build          # production build + syncs to assets/web/vue/
-pnpm lint:fix       # eslint auto-fix
-pnpm format         # prettier
-```
+Web 前端（`modules/web/`，嵌入 HTTP 服务的前端，Vue 3 + Vite）构建命令见同一文档的 Web 前端小节，需 Node >= 20、pnpm >= 9。
 
 ## Architecture
 
@@ -105,16 +64,7 @@ The project has three library modules in `modules/`:
 
 Jetpack Compose (Material3, BOM 2026.08.00) is used for newer UI surfaces (e.g. debug log panel). Traditional View system (ViewBinding + XML layouts) is used for most existing screens. Both coexist — ComposeViews can be overlaid on View-based Activities.
 
-Compose 规范拆分为 8 个文件，位于 `docs/project-rules/compose/`：
-
-- [`compose/structure.md`](docs/project-rules/compose/structure.md) — 目录结构、命名、API 契约、通用脚手架
-- [`compose/state-events.md`](docs/project-rules/compose/state-events.md) — UiState / Event 流、Dialog/BottomSheet 渲染
-- [`compose/theme-styles.md`](docs/project-rules/compose/theme-styles.md) — 颜色、尺寸、图片加载、字体、字符串、动画
-- [`compose/performance.md`](docs/project-rules/compose/performance.md) — Recomposition 防范、副作用、图片内存
-- [`compose/navigation-preview.md`](docs/project-rules/compose/navigation-preview.md) — 导航规范、Preview 规范
-- [`compose/accessibility.md`](docs/project-rules/compose/accessibility.md) — 无障碍（contentDescription / semantics / 触控目标）
-- [`compose/testing.md`](docs/project-rules/compose/testing.md) — 测试分层、runTest + Turbine 模板、CI 接入
-- [`compose/migration-review.md`](docs/project-rules/compose/migration-review.md) — 老代码迁移三阶段、Review Checklist（CI 硬卡 + 人工项）、典型违规示例
+Compose 规范拆分为 8 个文件，位于 `docs/project-rules/compose/`（目录结构/状态事件/主题样式/性能/导航/无障碍/测试/迁移审查，索引见 [README.md](docs/project-rules/README.md)）。**写 Compose 前先按主题读对应文件**；迁移老代码时重点对照 [`compose/migration-review.md`](docs/project-rules/compose/migration-review.md)。
 
 ## 项目级规范（必读）
 
@@ -142,71 +92,35 @@ Compose 规范拆分为 8 个文件，位于 `docs/project-rules/compose/`：
 ## Coding Conventions
 
 - Kotlin 代码风格遵循 Google Android Style Guide
-- 命名规则：
-  - Activities: `XxxActivity`
-  - ViewModels: `XxxViewModel`
-  - Fragments: `XxxFragment`
-- 日志使用统一的 tag 格式：`AppTag.xxx`
+- 命名规则：Activity `XxxActivity`、ViewModel `XxxViewModel`、Fragment `XxxFragment`
+- 日志统一 tag 格式：`AppTag.xxx`
 
 ## Comments
 
-> 注释优先表达**为什么这么做、特殊约束、业务背景**，代码本身负责表达“是什么、怎么做”。
+> 注释优先表达**为什么这么做、特殊约束、业务背景**，代码本身负责表达”是什么、怎么做”
 
-- **类注释**
-  - 核心/复杂类（单例、引擎、解析器、管理器等）必须补充完整 KDoc。
-  - 普通 `Activity` / `Adapter` / `ViewModel` 无需完整 KDoc，仅简短说明核心用途即可。
-- **函数注释**
-  - 对外公开 API、复杂业务逻辑、有特殊入参/返回值约束的函数，必须写 KDoc。
-  - 简单 getter / setter、工具内部私有简单函数，不额外加注释。
-- **变量注释**
-  - 优先靠命名表达语义，命名清晰则不加行内注释。
-  - 仅业务含义隐晦、存在特殊边界约定时才补充注释。
-- **注释原则**
-  - 写「为什么」，不重复复述代码已经能看出来的「是什么」。
-  - 不要把代码逻辑翻译成自然语言。
+- **类注释**：核心/复杂类（单例、引擎、解析器、管理器）必须完整 KDoc；普通 `Activity` / `Adapter` / `ViewModel` 简短说明核心用途即可。
+- **函数注释**：对外 API、复杂业务逻辑、有特殊入参/返回值约束的函数必须 KDoc；简单 getter/setter、私有简单函数不写。
+- **变量注释**：优先用命名表达语义；仅业务含义隐晦、有特殊边界约定时补一行。
 
-## Dependency Management
+## Dependency Management & Version Catalog
 
-- 所有依赖版本通过 `gradle/libs.versions.toml` 统一管理
-- 禁止直接在 `build.gradle` 中硬编码版本号
-- 新增依赖需同步更新版本目录文档
+- 所有依赖版本通过 `gradle/libs.versions.toml` 统一管理，在 `build.gradle.kts` 中按 `libs.xxx` 引用；禁止在 `build.gradle` 中硬编码版本号；新增依赖需同步更新版本目录文档。
+- 主版本与 SDK 信息（Kotlin / Hilt / OkHttp / Room / Compose BOM 等）见 [docs/project-rules/build-commands.md](docs/project-rules/build-commands.md)。
 
 ## Testing Strategy
 
-这个视情况讨论，因为有时开发环境不允许。
-
-- 单元测试：`app/src/test/`
-- 集成测试：`app/src/androidTest/`
-- 测试覆盖率要求：核心模块 ≥ 80%
-- Mock 框架：Mockk
-- 协程测试：kotlinx-coroutines-test
-- LeakCanary: `debugImplementation` only — memory leak detection in debug builds.
-
-## Version Catalog
-
-All dependency versions are in `gradle/libs.versions.toml`. In `build.gradle.kts` or `build.gradle`, reference them as `libs.xxx`. Major versions: Kotlin 2.3.10, Hilt 2.59, OkHttp 5.3.2, Room 2.8.4, Coroutines 1.10.2, Compose BOM 2026.08.00.
+单元/集成测试位置、覆盖率约定、Mockk / kotlinx-coroutines-test / LeakCanary 说明见 [docs/project-rules/testing.md](docs/project-rules/testing.md)。测试策略视开发环境情况讨论（有时环境不允许，不强求）。
 
 ## Build Variants
 
-Three product flavors in dimension "app":
+三个 product flavors（维度 "app"）：`appLegacy`（`io.legado.app`，与原版同包名）、`appMax`（`io.legado.app.yuedu`，共存主开发目标）、`appS`（`io.legado.app.yuedu.a`）。
 
-- `appLegacy` — same package name as original Legado (`io.legado.app`)
-- `appMax` — coexistence package (`io.legado.app.yuedu`), the primary development target
-- `appS` — another coexistence package (`io.legado.app.yuedu.a`)
-
-SDK levels: minSdk 23, targetSdk 37, compileSdk 37, JVM 17 toolchain. coreLibraryDesugaring is enabled — JVM 17 syntax (records, text blocks, List.of) works down to API 23.
-Both build types set an applicationIdSuffix (`.debug` / `.release`), so the installed package is e.g. `io.legado.app.yuedu.debug`, not the bare flavor id.
-
-Release builds: minifyEnabled + shrinkResources + ProGuard (`app/proguard-rules.pro`, `app/cronet-proguard-rules.pro`). Debug builds: no minification.
+minSdk 23 / targetSdk 37 / compileSdk 37 / JVM 17 toolchain；`coreLibraryDesugaring` 开启（JVM 17 语法下兼容至 API 23）。debug/release 均带 `applicationIdSuffix`（如 `io.legado.app.yuedu.debug`），Release 开启 minify + shrinkResources + ProGuard。见 [docs/project-rules/build-commands.md](docs/project-rules/build-commands.md)。
 
 ## CI/CD
 
-GitHub Actions in `.github/workflows/`:
-
-- `test.yml` — builds all 3 release flavors on push to main; auto-creates GitHub/Gitee releases with changelog from `updateLog.md`
-- `web.yml` — builds the Vue frontend on changes to `modules/web/` and commits the output to `app/src/main/assets/web/vue/`
-- `cronet.yml` — updates Cronet native libraries
-- `lint.yaml` — runs lint in CI; treat `./gradlew lint` passing as part of "done"
+GitHub Actions 全部位于 `.github/workflows/`，各 workflow 的职责与触发条件见 [docs/project-rules/ci-cd.md](docs/project-rules/ci-cd.md)（test.yml 构建并发布、web.yml 构建 Vue 前端、cronet.yml 更新 Cronet、lint.yaml 跑 lint 等）。CI 中 lint 通过视为"完成"的一部分。
 
 ## Conventions
 
@@ -218,25 +132,12 @@ GitHub Actions in `.github/workflows/`:
 
 ## Git Commit 规范
 
-Conventional Commits 中文适配，husky + commitlint 自动校验。
+Conventional Commits 中文适配，husky + commitlint 自动校验不合规提交。
 
-格式：`<type>(<scope>): <subject>`，type 用英文（feat/fix/docs/refactor/perf/test/chore/ci/revert/style），scope 和 subject 用中文，subject 为动宾短语不超 100 字符。
-
-交互式提交：`npm run commit`。不合规提交会被自动拦截。
-
-**新人首次使用需在项目根目录运行 `npm install`**，否则 git hook 不会生效。
-
-详细规范与常见问题见 `docs/git-hook/`。
-
-### 帮助文档同步检查（pre-commit 门禁）
-
-改了功能代码但没改对应的帮助文档？这个 hook 会拦下来。
-
-- 映射表：`docs/help-doc-sync/map.json`（代码路径 → 必须同步的 md 文档）
-- 脚本：`scripts/help-doc-sync.mjs`（由 `.husky/pre-commit` 调用）
-- 拦截行为：改了受管代码区域（如 `model/analyzeRule/**`）但没同时改对应的 md，commit 会被阻止并给出提示
-- 逃生口：`SKIP_DOC_SYNC=1 git commit ...`（仅限确认本次改动不涉及文档内容时使用）
-- 扩展映射：编辑 `docs/help-doc-sync/map.json` 即可，无需改脚本
+- 格式：`<type>(<scope>): <subject>`，type 用英文（feat/fix/docs/refactor/perf/test/chore/ci/revert/style），scope 和 subject 用中文，subject 为动宾短语且 ≤ 100 字符。
+- 交互式提交：`npm run commit`；**新人首次使用需在项目根目录运行 `npm install`**，否则 git hook 不会生效。
+- **帮助文档同步门禁（pre-commit）**：改了受管代码区域（映射表 `docs/help-doc-sync/map.json`，脚本 `scripts/help-doc-sync.mjs`）但没同步改对应 md，commit 会被拦下并给提示；确认本次改动不涉及文档内容时可用 `SKIP_DOC_SYNC=1 git commit ...` 逃生；扩展映射只需编辑 map.json，无需改脚本。
+- 详细规范、反例与常见问题见 `docs/git-hook/`。
 
 ## 核心规则
 

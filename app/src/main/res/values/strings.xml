@@ -1856,6 +1856,7 @@
     <string name="unknown_type">Unknown type</string>
 
     <!-- URL Record -->
+    <string name="url_record_count">Total %1$d records</string>
     <string name="url_record">URL Access Record</string>
     <string name="record_url_switch">Enable URL Recording</string>
     <string name="record_url_enabled">URL Recording Enabled</string>

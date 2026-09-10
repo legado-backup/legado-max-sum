@@ -1465,6 +1465,7 @@
     <string name="touch_page_anim_speed_title">觸控翻頁動畫速度</string>
     <string name="unsafe_ssl_summary">允許不安全 SSL 憑證連線</string>
     <string name="unsafe_ssl_title">不安全 SSL</string>
+    <string name="url_record_count">共 %1$d 條記錄</string>
     <string name="url_record">URL 存取記錄</string>
     <string name="verbose_update_log">詳細更新日誌</string>
     <string name="verbose_update_log_summary">記錄更詳細的更新過程日誌</string>

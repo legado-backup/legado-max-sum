@@ -1779,6 +1779,7 @@
     <!-- Smart Import -->
     <string name="smart_import">智能导入</string>
     <!-- URL Record -->
+    <string name="url_record_count">共 %1$d 条记录</string>
     <string name="url_record">URL访问记录</string>
     <string name="record_url_switch">启用URL记录</string>
     <string name="record_url_enabled">URL记录已启用</string>

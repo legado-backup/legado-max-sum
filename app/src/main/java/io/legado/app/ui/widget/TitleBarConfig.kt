@@ -91,7 +91,7 @@ private fun TitleBar.applyTopBarConfig(config: TopBarConfig.Config) {
     val shape = regularBackground(
         backgroundColor,
         radius,
-        backgroundAlpha
+        backgroundAlpha,
     )
     val wallpaper = TopBarConfig.currentWallpaperFile(context, AppConfig.isNightTheme)
         ?.takeIf { config.style == TopBarConfig.STYLE_REGULAR }
@@ -133,7 +133,7 @@ private fun TitleBar.topBarContentColor(): Int {
             // 背景越亮文字越深：亮背景(>0.5)用深色文字，暗背景用浅色文字。
             // 与 MenuExtensions.getMenuColor 透明导航栏分支的取色约定保持一致。
             return context.getPrimaryTextColor(
-                ColorUtils.calculateLuminance(bgColor) > 0.5
+                ColorUtils.calculateLuminance(bgColor) > 0.5,
             )
         }
     return MenuExtensions.getMenuColor(context, topBarTheme)
@@ -157,12 +157,10 @@ private fun Drawable?.resolveSolidColor(): Int? {
 }
 
 /** 半透明背景色与页面背景合成，得到实际显示的底色 */
-private fun Int.compositeOverPageBackground(context: Context): Int {
-    return if (Color.alpha(this) == 255) {
-        this
-    } else {
-        ColorUtils.compositeColors(this, context.backgroundColor)
-    }
+private fun Int.compositeOverPageBackground(context: Context): Int = if (Color.alpha(this) == 255) {
+    this
+} else {
+    ColorUtils.compositeColors(this, context.backgroundColor)
 }
 
 /** 应用顶栏子 View 配置（TabLayout、SearchView），使用当前 TopBarConfig */
@@ -177,25 +175,27 @@ fun View.applyTopBarChildConfig() {
 }
 
 /** 生成常规样式的圆角背景 Drawable */
-private fun regularBackground(color: Int, radius: Float, alphaPercent: Int): Drawable {
-    return GradientDrawable().apply {
-        setColor(TopBarConfig.withOpacity(color, alphaPercent))
-        cornerRadii = if (radius > 0f) {
-            floatArrayOf(
-                0f, 0f,
-                0f, 0f,
-                radius, radius,
-                radius, radius
-            )
-        } else {
-            null
-        }
+private fun regularBackground(color: Int, radius: Float, alphaPercent: Int): Drawable = GradientDrawable().apply {
+    setColor(TopBarConfig.withOpacity(color, alphaPercent))
+    cornerRadii = if (radius > 0f) {
+        floatArrayOf(
+            0f,
+            0f,
+            0f,
+            0f,
+            radius,
+            radius,
+            radius,
+            radius,
+        )
+    } else {
+        null
     }
 }
 
 private fun TitleBar.applyTopBarChildConfig(
     config: TopBarConfig.Config,
-    contentColor: Int = topBarContentColor()
+    contentColor: Int = topBarContentColor(),
 ) {
     findViewById<TabLayout?>(R.id.tab_layout)?.applyTopBarChildConfig(config, contentColor)
     findViewById<View?>(R.id.search_view)?.applyTopBarChildConfig(config, contentColor)
@@ -208,7 +208,7 @@ private fun TitleBar.applyTransparentTopBarChildConfig() {
         setBackgroundColor(Color.TRANSPARENT)
         setTabTextColors(tabTextColorStateList(contentColor))
         setSelectedTabIndicatorColor(
-            resolveTabIndicatorColor(context, config, Color.TRANSPARENT)
+            resolveTabIndicatorColor(context, config, Color.TRANSPARENT),
         )
     }
     findViewById<View?>(R.id.search_view)?.applyTopBarChildConfig(config, contentColor)
@@ -224,7 +224,7 @@ private fun View.applyTopBarChildConfig(config: TopBarConfig.Config, contentColo
         setBackgroundColor(barColor)
         setTabTextColors(tabTextColorStateList(contentColor))
         setSelectedTabIndicatorColor(
-            resolveTabIndicatorColor(context, config, barColor)
+            resolveTabIndicatorColor(context, config, barColor),
         )
     }
     if (id == R.id.search_view) {
@@ -243,7 +243,7 @@ private fun View.applyTopBarChildConfig(config: TopBarConfig.Config, contentColo
 private fun resolveTabIndicatorColor(
     context: Context,
     config: TopBarConfig.Config,
-    barColor: Int
+    barColor: Int,
 ): Int {
     val selectedColor = config.tagSelectedColor
         ?.let { TopBarConfig.withOpacity(it, config.tagSelectedAlpha) }
@@ -269,9 +269,9 @@ private fun tabTextColorStateList(contentColor: Int): ColorStateList {
     return ColorStateList(
         arrayOf(
             intArrayOf(android.R.attr.state_selected),
-            StateSet.WILD_CARD
+            StateSet.WILD_CARD,
         ),
-        intArrayOf(contentColor, normalColor)
+        intArrayOf(contentColor, normalColor),
     )
 }
 
@@ -280,13 +280,13 @@ private fun TitleBar.bitmapLayer(file: File, alphaPercent: Int, radius: Float): 
         BitmapUtils.decodeBitmap(
             file.absolutePath,
             resources.displayMetrics.widthPixels.coerceAtLeast(1),
-            height.takeIf { it > 0 } ?: (56 * resources.displayMetrics.density).toInt()
+            height.takeIf { it > 0 } ?: (56 * resources.displayMetrics.density).toInt(),
         )
     }.getOrNull() ?: return null
     return TopBarWallpaperDrawable(
         bitmap = bitmap,
         radius = radius,
-        alphaPercent = alphaPercent
+        alphaPercent = alphaPercent,
     )
 }
 
@@ -298,7 +298,7 @@ private fun TitleBar.bitmapLayer(file: File, alphaPercent: Int, radius: Float): 
 private class TopBarWallpaperDrawable(
     private val bitmap: Bitmap,
     private val radius: Float,
-    alphaPercent: Int
+    alphaPercent: Int,
 ) : Drawable() {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
@@ -315,7 +315,7 @@ private class TopBarWallpaperDrawable(
         rect.set(bounds)
         val scale = maxOf(
             bounds.width() / bitmap.width.toFloat(),
-            bounds.height() / bitmap.height.toFloat()
+            bounds.height() / bitmap.height.toFloat(),
         )
         val dx = bounds.left + (bounds.width() - bitmap.width * scale) / 2f
         val dy = bounds.top + (bounds.height() - bitmap.height * scale) / 2f
@@ -327,12 +327,16 @@ private class TopBarWallpaperDrawable(
         path.addRoundRect(
             rect,
             floatArrayOf(
-                0f, 0f,
-                0f, 0f,
-                radius, radius,
-                radius, radius
+                0f,
+                0f,
+                0f,
+                0f,
+                radius,
+                radius,
+                radius,
+                radius,
             ),
-            Path.Direction.CW
+            Path.Direction.CW,
         )
         canvas.drawPath(path, paint)
     }
@@ -348,9 +352,7 @@ private class TopBarWallpaperDrawable(
     }
 
     @Deprecated("Deprecated in Android SDK")
-    override fun getOpacity(): Int {
-        return if (paint.alpha >= 255) PixelFormat.OPAQUE else PixelFormat.TRANSLUCENT
-    }
+    override fun getOpacity(): Int = if (paint.alpha >= 255) PixelFormat.OPAQUE else PixelFormat.TRANSLUCENT
 
     override fun getIntrinsicWidth(): Int = -1
 

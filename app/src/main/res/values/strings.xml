@@ -791,6 +791,8 @@
     <string name="add_to_text_context_menu_s">Long tap to display Legado·Search in the operation menu</string>
     <string name="add_to_text_context_menu_t">Text operation display Search</string>
     <string name="record_log">Record log</string>
+    <string name="debug_log">Debug log</string>
+    <string name="export_log">Export log</string>
     <string name="log">Log</string>
     <string name="chinese_converter">Simplified conversion</string>
     <string name="change_icon_error">The icon is a vector icon, which was not supported before Android 8.0</string>
@@ -1890,6 +1892,7 @@
     <string name="export_to_file">Export to File</string>
 
     <!-- Cover Gallery -->
+    <string name="import_zip">Import zip</string>
     <string name="cover_gallery">Cover Gallery</string>
     <string name="cover_gallery_summary">Manage group cover gallery, can be set as global default cover source</string>
 

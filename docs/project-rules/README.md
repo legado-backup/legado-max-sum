@@ -32,7 +32,7 @@
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | [compose/structure.md](./compose/structure.md)                   | Compose 目录结构、命名、API 契约、组件拆分标准                                               | Screen / StateHolder / 子组件职责边界                        |
 | [compose/state-events.md](./compose/state-events.md)             | `StateFlow<UiState>`、`Channel<Event>` 缓冲区语义、Dialog 条件渲染、`repeatOnLifecycle` 绑定 | 一次性事件缓冲区必须显式指定；ViewModel 禁止直接操作平台 API |
-| [compose/theme-styles.md](./compose/theme-styles.md)             | 颜色、dimens、图片加载（Glide 链路）、字体、字符串、动画三档时长                             | 禁止魔法数字，统一走主题资源                                 |
+| [compose/theme-styles.md](./compose/theme-styles.md)             | 颜色、dimens、图片加载（Glide 链路）、字体、字符串、动画三档时长、主题切换与页面重建         | 禁止魔法数字；主题切换禁止裸 `recreate()` 原地重建           |
 | [compose/performance.md](./compose/performance.md)               | Recomposition 防范、`derivedStateOf`、LazyColumn key + stable 参数                           | 不稳定参数导致多余重组；禁止 Composable 内直接读 DB          |
 | [compose/navigation-preview.md](./compose/navigation-preview.md) | 路由集中定义、Preview 规范                                                                   | 路由不散落                                                   |
 | [compose/accessibility.md](./compose/accessibility.md)           | `contentDescription`、`semantics` merge、48dp 触控目标、字体缩放                             | 触控目标下限 48dp                                            |

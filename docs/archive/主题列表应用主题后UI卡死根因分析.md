@@ -441,3 +441,60 @@ override fun recreate() {
 - MainActivity / ConfigActivity 的 RECREATE 重建延后到 `onResume`（后台不并发重建）。
 
 > 本次谓词：修的是「应用主题时重建风暴/竞态」这条主线；背景图模糊耗时优化（小图放大模糊）与 `clearBg` 异步化属于性能项，不在本次范围。
+
+## 15. 第八轮（2026-09-10）：模拟器实测「recreate 原地重建实例重组冻结」并修复
+
+### 15.1 背景：第 7 轮修复后仍复现
+
+第 7 轮落地（重建风暴合并 + 防抖 + configChanges）后，在 MuMu 模拟器（Android 15，HyperOS 风格，应用 `io.legado.app.debug` = appLegacyDebug）上 **单次 build 依然能稳定复现**：应用主题（日夜切换）后，页面仅在返回/应用按钮可点，tab 点击、列表滑动、长按多选全部无效。
+
+### 15.2 现象精准化（gfxinfo + 打点探针，一次 relaunch 只重建一次为前提）
+
+在「单次重建」（迟到 RECEIVE 已被 2000ms 宽限拦截）的前提下，冻结依然发生：
+
+```
+冷启动（对照组）  : onTabChange → 9ms 后 recomposed → animateScrollToPage 完成 → 27~33 帧
+relaunch/recreate: onTabChange → （无 recomposed）→（无 pageanim）→ 0~2 帧
+```
+
+- **输入通**：tab 点击的 onClick 正常执行（`state.switchTab` 被调用，from=NIGHT 读到值）；
+- **状态写通**：`switchTab` 修改 `tab`（mutableStateOf）后无后续；
+- **重组断**：Screen 顶层 `SideEffect` 日志不再打印；`LaunchedEffect(state.tab)` 不重启（连动画入口日志都不出现）；
+- **强致**：`Snapshot.sendApplyNotifications()` + `view.invalidate()` 显式唤醒均无效（排除了「观察者没收到通知」）；
+- **帧**：`dumpsys gfxinfo` 显示 0~2 帧 —— 连 LazyColumn 滚动（pointer 驱动）都不产生帧；
+- 主线程 ANR 栈：`Looper.loop → MessageQueue.next → epoll_pwait` —— 无死锁、空闲正常；
+- SurfaceFlinger：窗口 `shown=true / HAS_DRAWN / isOnScreen=true`，无 `ScreenRotationAnimation`，无残活动画（`mEnterAnimationPending=false`）；
+- **对照组（决定性）**：同一进程（warm，pid 不变）、同一 Activity、同一探针 —— 全新 `startActivity` 启动的实例：重组 5ms 内触发、动画 200ms 完成、帧数 28 —— **完全健康**。
+
+### 15.3 结论
+
+- 冻结与「窗口过渡动画」「输入层」「主线程」「双重建竞态」**均无关**（动画 scale=0 照旧复现）；
+- 根因是 **ActivityTaskManager 的原地 recreate（系统 relaunch）重建出的窗口层级的 Compose 实例，其重组/重绘调度整体停摆**：首帧组合成功、随后所有 snapshot 变更都不再驱动 Recomposer（`sendApplyNotifications` 无效说明失效层级在 recomposer 与 frame clock 之间，而非观察者通道）；
+- 同一进程内「全新启动」的实例完全健康 —— **绕过原地重建即可根治**。
+
+### 15.4 修复（第 8 轮落地）
+
+`ThemeManageActivity`：
+
+1. 用 `override fun recreate()` 接管全部重建入口（原 BaseComposeActivity 的 guard 保留不调用）：
+   - 不再走系统原地重建，改为 `startActivity(Intent(this, ThemeManageActivity))` + `finish()`（NO_ANIMATION），
+     让新窗口以「全新启动」路径建立（已被实测为健康路径）；
+2. 保留第 7 轮既有守卫：
+   - `onCreate` 记录实例创建时刻 + 2s 宽限，拦截 AppCompat 强制 relaunch 后防抖窗口内迟到的 RECEIVE 广播；
+   - `recreatePending` 防重入（RECEIVE 的 `postOnAnimation` 与 override 内部共用，未预先置位以防自锁）。
+3. 还原所有诊断探针（日志、SideEffect、pager 动画打点、sendApplyNotifications/invalidate 实验代码已全部移除）。
+
+### 15.5 验证（模拟器实测，干净包）
+
+| 场景 | 结果 |
+|---|---|
+| 应用主题（DAY→NIGHT 真实切换，AppCompat 强制 relaunch） | 唯一一次重建走 recreate→restart；迟到 RECEIVE diff≈1477ms 被拦截 |
+| 重启后点 tab（NIGHT→DAY） | `recomposed` 触发、`pageanim done`、页面切换、帧数正常 |
+| 长按主题卡 → 多选模式 | UI 底部出现「取消/全选」等多选栏（旧冻结态不出现） |
+| 同主题再次应用（RECEIVE→recreate 路径） | 同样走 restart，交互正常 |
+| cold start 回归 | 正常（探针后再次冒烟 10 帧、列表切换正确） |
+
+### 15.6 遗留事项
+
+- 现象与设备/ROM 的相关性：MuMu/模拟器与真机 HyperOS 在「recreate 原地重建」上的表现应一致（原始用户报告即真机），修复走「全新启动」路径规避，不依赖 ROM 行为；
+- 「recreate 后 Recomposer 不调度」的底层（Compose runtime x ActivityTaskManager relaunch）未在本次继续深挖 —— 已用替换路径绕开，属框架层行为。

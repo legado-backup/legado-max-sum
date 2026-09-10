@@ -8,21 +8,29 @@
 
 Gradle wrapper（Windows 下为 `gradlew.bat`），JDK 17 要求。
 
-| 命令                                            | 说明                                          |
-| ----------------------------------------------- | --------------------------------------------- |
-| `./gradlew assembleDebug`                       | Debug 构建（默认 flavor：appMax）             |
-| `./gradlew assembleRelease`                     | Release 构建（ProGuard + resource shrinking） |
-| `./gradlew assembleAppMaxDebug`                 | appMax（`io.legado.app.yuedu`，共存包）       |
-| `./gradlew assembleAppLegacyRelease`            | appLegacy（`io.legado.app`，与原版一致）      |
-| `./gradlew assembleAppSDebug`                   | appS（`io.legado.app.yuedu.a`）               |
-| `./gradlew installDebug` / `installAppMaxDebug` | 安装到设备                                    |
-| `./gradlew test`                                | 单元测试                                      |
-| `./gradlew connectedAndroidTest`                | 仪器测试（Instrumented tests）                |
-| `./gradlew stop`                                | 停止 Gradle daemon                            |
-| `./gradlew.bat :app:compileAppMaxDebugKotlin`   | 语法检查式编译（"Grammar Test"）              |
-| `./gradlew lint`                                | Lint                                          |
-| `./gradlew app:downloadCronet`                  | **首次构建前必须执行**，下载 Cronet 原生库    |
-| `./gradlew assembleDebug --warning-mode all`    | 查看 DSL 语法警告（Windows/Mac/Linux 同命令） |
+| 命令                                            | 说明                                                        |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| `./gradlew assembleDebug`                       | Debug 构建（默认 flavor：appMax）                           |
+| `./gradlew assembleRelease`                     | Release 构建（ProGuard + resource shrinking）               |
+| `./gradlew assembleAppMaxDebug`                 | appMax（`io.legado.app.yuedu`，共存包）                     |
+| `./gradlew assembleAppLegacyRelease`            | appLegacy（`io.legado.app`，与原版一致）                    |
+| `./gradlew assembleAppSDebug`                   | appS（`io.legado.app.yuedu.a`）                             |
+| `./gradlew installDebug` / `installAppMaxDebug` | 安装到设备                                                  |
+| `./gradlew test`                                | 单元测试                                                    |
+| `./gradlew connectedAndroidTest`                | 仪器测试（Instrumented tests）                              |
+| `./gradlew stop`                                | 停止 Gradle daemon                                          |
+| `./gradlew.bat :app:compileAppMaxDebugKotlin`   | 语法检查式编译（"Grammar Test"）                            |
+| `./gradlew lint`                                | Lint                                                        |
+| `./gradlew spotlessCheck`                       | Kotlin 格式门禁：只检查自 origin/main 以来的改动（CI 必跑） |
+| `./gradlew spotlessApply`                       | 自动修正全部 Kotlin 格式问题；提交前可手动执行              |
+| `./gradlew app:downloadCronet`                  | **首次构建前必须执行**，下载 Cronet 原生库                  |
+| `./gradlew assembleDebug --warning-mode all`    | 查看 DSL 语法警告（Windows/Mac/Linux 同命令）               |
+
+### Kotlin 代码格式（spotless + ktlint）
+
+- 配置位于根 `build.gradle` 的 `spotless {}` 块；`ratchetFrom 'origin/main'` 使检查只覆盖**自 origin/main 以来的改动**，存量代码不强制全量合规。
+- 与存量惯例冲突的风格类规则已在配置中关闭：函数/属性命名（Compose 大写组件名、驼峰常量）、import 字母序、行宽（暂放开）。需要调整时改根 build.gradle 的 `editorConfigOverride`。
+- Kotlin 格式化由 spotless 负责；`prettier`（node）只处理 `js/ts/vue/md`，**不碰 `.java` 与 `.kt`**。
 
 ## Web 前端（modules/web）
 

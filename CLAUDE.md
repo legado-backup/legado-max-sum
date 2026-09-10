@@ -146,7 +146,7 @@ Conventional Commits 中文适配，husky + commitlint 自动校验不合规提�
 ## 核心规则
 
 1. **Check Skills First**: 开始任务前，必须检查是否有匹配的 Skill。
-2. **设计先于编码** — 收到功能需求时，先用 brainstorming skill 做需求分析
+2. **设计先于编码** — 收到功能需求时，先检查可用的 Skill 并加载匹配项做需求分析（详见「Skill 的使用」）
 3. **测试先于实现** — 写代码前先写测试（TDD）
 4. **验证先于完成** — 声称完成前必须运行验证命令
 5. **发现无关 bug/优化 → follow-up 报告**：任务过程中发现的 bug 或优化点，如果与当前 change 无关，不在本次修，而是作为 follow-up 报告单独提出。

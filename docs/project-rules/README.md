@@ -1,7 +1,7 @@
 # project-rules 索引
 
 > 本目录是 Legado_Max 的**项目级强制规范库**，不是教程，是红线。
-> 新代码必须对照这里写，Code Review 以此目录为标尺；标 `[强制]` 的条目由 lint/Detekt/CI 或人工 Review 兜底。
+> 新代码必须对照这里写，Code Review 以此目录为标尺；标 `[强制]` 的条目由 spotless(ktlint)/Android lint/CI 或人工 Review 兜底。
 >
 > **阅读顺序建议**：`coroutine-rules.md`（所有异步代码都绕不开）→ `repository-rules.md`（碰数据层）→ 写 Compose UI 时再进 `compose/`。
 

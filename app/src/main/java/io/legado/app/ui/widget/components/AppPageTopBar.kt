@@ -26,7 +26,7 @@ import io.legado.app.ui.theme.pageTopBarBackground
 import io.legado.app.ui.theme.pageTopBarColors
 
 /**
- * 页面统一顶栏（theme-styles.md §14.2 脚手架项）
+ * 页面统一顶栏（theme-styles.md §7.7.1 顶栏规范）
  *
  * 收敛各页面 TopAppBar 的重复配色样板：
  * - 背景/阴影/圆角/壁纸统一由 [pageTopBarBackground] 承载，配色源 [pageTopBarColors]（同 TopBarConfig 公式）

@@ -1,6 +1,6 @@
 package io.legado.app.ui.config.theme.manage
 
-import android.os.Bundle
+import android.content.res.Configuration
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
@@ -25,13 +25,15 @@ import java.io.File
 
 /**
  * 主题管理容器 Activity
- * 
+ *
  * 为什么只留这点代码：
  * 作为纯粹的容器，仅充当系统级组件（如文件选择器 Intent、ColorPicker 碎片对话框）与界面的桥梁。
  * 所有的业务状态流转和逻辑校验已经下沉到了 [ThemeManageViewModel]，
  * 此类仅负责把外部系统回调转换成 ViewModel 的方法调用，绝对禁止在此类中硬编码任何 UI 状态。
  */
-class ThemeManageActivity : BaseComposeActivity(), ColorPickerDialogListener {
+class ThemeManageActivity :
+    BaseComposeActivity(),
+    ColorPickerDialogListener {
 
     private val viewModel: ThemeManageViewModel by viewModels {
         ThemeManageViewModelFactory(application)
@@ -94,6 +96,18 @@ class ThemeManageActivity : BaseComposeActivity(), ColorPickerDialogListener {
 
     private var recreatePending = false
 
+    /**
+     * 日夜模式（含跟随系统翻转）由本页自行重建。
+     *
+     * Manifest 已声明 configChanges="uiMode"，AppCompat 不会自动重建本页；
+     * 这里把 uiMode 变化转成一次重建（基类守卫会把多路触发合并为一次），
+     * 避免与事件总线的 RECREATE 重建构成竞态双重建。
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        recreate()
+    }
+
     override fun observeLiveBus() {
         super.observeLiveBus()
         observeEvent<String>(EventBus.RECREATE) {
@@ -151,7 +165,7 @@ class ThemeManageActivity : BaseComposeActivity(), ColorPickerDialogListener {
                     .setMaxValue(25)
                     .setValue(currentBlur)
                     .show { blur -> viewModel.updateDraftBlur(blur) }
-            }
+            },
         )
     }
 

@@ -251,11 +251,11 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
         set(value) {
             if (isNightTheme != value) {
-                if (value) {
-                    appCtx.putPrefString(PreferKey.themeMode, "2")
-                } else {
-                    appCtx.putPrefString(PreferKey.themeMode, "1")
-                }
+                // 同步刷新本地缓存，保证同栈内 initNightMode() 读到正确目标模式，
+                // 避免缓存滞后触发错误/多余的 AppCompat 模式切换重建
+                themeMode = if (value) "2" else "1"
+                isEInkMode = false
+                appCtx.putPrefString(PreferKey.themeMode, themeMode)
             }
         }
     var showBookname: Int

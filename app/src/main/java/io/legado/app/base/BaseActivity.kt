@@ -15,6 +15,7 @@ import android.widget.FrameLayout
 import androidx.activity.addCallback
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.viewbinding.ViewBinding
 import io.legado.app.R
 import io.legado.app.constant.AppConst
@@ -40,6 +41,9 @@ import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.applyBackgroundTint
 import io.legado.app.utils.applyOpenTint
 import io.legado.app.utils.applyTint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import io.legado.app.utils.disableAutoFill
 import io.legado.app.utils.fullScreen
 import io.legado.app.utils.hideSoftInput
@@ -57,8 +61,9 @@ abstract class BaseActivity<VB : ViewBinding>(
     private val toolBarTheme: Theme = Theme.Auto,
     private val transparent: Boolean = false,
     private val imageBg: Boolean = true,
-    private val showOpenMenuIcon: Boolean = true
-) : AppCompatActivity(), ReadAloudMiniBarHost {
+    private val showOpenMenuIcon: Boolean = true,
+) : AppCompatActivity(),
+    ReadAloudMiniBarHost {
 
     protected abstract val binding: VB
     private var readAloudMiniBarController: ReadAloudMiniBarController? = null
@@ -81,7 +86,7 @@ abstract class BaseActivity<VB : ViewBinding>(
         parent: View?,
         name: String,
         context: Context,
-        attrs: AttributeSet
+        attrs: AttributeSet,
     ): View? {
         if (AppConst.menuViewNames.contains(name) && parent?.parent is FrameLayout) {
             (parent.parent as View).setBackgroundColor(backgroundColor)
@@ -107,7 +112,7 @@ abstract class BaseActivity<VB : ViewBinding>(
         onBackPressedDispatcher.addCallback(this) {
             finish()
         }
-        observeLiveBus()    // 模板方法：子类覆写 observeLiveBus() 注册事件订阅，自动在 onCreate 中调用
+        observeLiveBus() // 模板方法：子类覆写 observeLiveBus() 注册事件订阅，自动在 onCreate 中调用
         observeEvent<Int>(EventBus.ALOUD_STATE) {
             refreshReadAloudMiniBar()
         }
@@ -183,12 +188,12 @@ abstract class BaseActivity<VB : ViewBinding>(
             Theme.Transparent -> setTheme(R.style.AppTheme_Transparent)
             Theme.Dark -> {
                 setTheme(R.style.AppTheme_Dark)
-               window.decorView.applyBackgroundTint(backgroundColor)
+                window.decorView.applyBackgroundTint(backgroundColor)
             }
 
             Theme.Light -> {
                 setTheme(R.style.AppTheme_Light)
-               window.decorView.applyBackgroundTint(backgroundColor)
+                window.decorView.applyBackgroundTint(backgroundColor)
             }
 
             else -> {
@@ -197,21 +202,29 @@ abstract class BaseActivity<VB : ViewBinding>(
                 } else {
                     setTheme(R.style.AppTheme_Dark)
                 }
-               window.decorView.applyBackgroundTint(backgroundColor)
+                window.decorView.applyBackgroundTint(backgroundColor)
             }
         }
     }
 
     open fun upBackgroundImage() {
         if (imageBg) {
-            try {
-                ThemeConfig.getBgImage(this, windowManager.windowSize)?.let { drawable ->
-                   window.decorView.background = drawable
+            val windowSize = windowManager.windowSize
+            lifecycleScope.launch(Dispatchers.Default) {
+                val drawable = try {
+                    ThemeConfig.getBgImage(this@BaseActivity, windowSize)
+                } catch (_: OutOfMemoryError) {
+                    toastOnUi("背景图片太大,内存溢出")
+                    null
+                } catch (e: Exception) {
+                    AppLog.put("加载背景出错\n${e.localizedMessage}", e)
+                    null
                 }
-            } catch (_: OutOfMemoryError) {
-                toastOnUi("背景图片太大,内存溢出")
-            } catch (e: Exception) {
-                AppLog.put("加载背景出错\n${e.localizedMessage}", e)
+                withContext(Dispatchers.Main) {
+                    if (!isFinishing && !isDestroyed) {
+                        drawable?.let { window.decorView.background = it }
+                    }
+                }
             }
         }
     }
@@ -285,13 +298,11 @@ abstract class BaseActivity<VB : ViewBinding>(
 
     open override fun onReadAloudMiniBarLongClick(): Boolean = false
 
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        return try {
-            super.dispatchTouchEvent(ev)
-        } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
-            false
-        }
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean = try {
+        super.dispatchTouchEvent(ev)
+    } catch (e: IllegalArgumentException) {
+        e.printStackTrace()
+        false
     }
 
     override fun finish() {

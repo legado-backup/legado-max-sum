@@ -241,12 +241,14 @@
         <!-- 配置界面 -->
         <activity
             android:name=".ui.config.ConfigActivity"
+            android:configChanges="uiMode"
             android:launchMode="standard" />
         <activity
             android:name=".ui.config.NavigationBarManageActivity"
             android:launchMode="standard" />
         <activity
             android:name=".ui.config.theme.manage.ThemeManageActivity"
+            android:configChanges="uiMode"
             android:launchMode="standard" />
         <activity
             android:name=".ui.config.theme.legacy.appTheme.ApplicationThemeActivity"

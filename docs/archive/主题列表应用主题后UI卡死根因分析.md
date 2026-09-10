@@ -392,5 +392,52 @@ override fun recreate() {
 | `app/src/main/java/io/legado/app/ui/config/ConfigActivity.kt`                   | RECREATE 重建延后到 onResume（后台不立即重建，避免并发窗口重建）                                 |
 | `app/src/main/java/io/legado/app/ui/main/MainActivity.kt`                       | 同上（保留 onResume 背景刷新回退）                                                               |
 | `app/src/main/java/io/legado/app/App.kt`                                        | `onConfigurationChanged` 断开反馈环：不再重复 `setDefaultNightMode`，只刷新主题+通知重建         |
-| `app/src/main/java/io/legado/app/help/config/ThemeConfig.kt`                    | 新增 `notifyRecreate()` 防抖广播（500→1500ms）；`applyDayNight` 改用它                           |
+| `app/src/main/java/io/legado/app/help/config/ThemeConfig.kt`                    | 新增 `notifyRecreate()` 防抖广播（500→1500ms）；`applyDaylight` 改用它                           |
 | `app/src/main/java/io/legado/app/ui/config/theme/legacy/ThemeConfigFragment.kt` | `recreateActivities()` 改用 `ThemeConfig.notifyRecreate()`（消除主题链路直接广播点）             |
+
+---
+
+## 14. 第七轮（2026-09-10）：test 分支修复缺失导致回归复现 + 本次落地
+
+### 14.1 回归确认
+
+用户再次上报同一现象（应用主题后页面定格、无法点击/滑动、仅返回可响应），但**当前 `test` 分支代码里前六轮修复全部不存在**（逐一核对）：
+
+| 轮次修复内容                          | 当前 `test` 分支状态                                           |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| App.kt `onConfigurationChanged` 断开反馈环 | ❌ 仍在 `CONFIG_UI_MODE` 变化时调用 `applyDayNight()`（`App.kt:147-152`） |
+| ThemeConfig `notifyRecreate()` 防抖        | ❌ 不存在；`applyDayNight` 仍直接 `postEvent(RECREATE)`（`ThemeConfig.kt:79`） |
+| Manifest `uiMode`（ThemeManage/Config）    | ❌ 两 Activity 均未声明 `configChanges`                            |
+| AppConfig.isNightTheme 缓存同步            | ❌ setter 只写 pref，`themeMode` 缓存不同步（`AppConfig.kt:253-258`） |
+| BaseComposeActivity 重建合并守卫           | ❌ 不存在                                                       |
+| BaseActivity 背景图异步化                | ❌ `upBackgroundImage()` 仍在主线程解码+模糊（`BaseActivity.kt:205`） |
+| MainActivity/ConfigActivity 延后重建       | ❌ RECREATE 回调仍立即 `recreate()`                              |
+| legacy `ThemeConfigFragment` 防抖广播     | ❌ 仍直接 `postEvent(RECREATE)`                                  |
+
+即「第 1~6 轮」的成果没有合到当前分支（或合过又被回退），用户的构建实际运行在**修复前状态**，bug 必然复现。
+
+### 14.2 本次根因复盘（与前述章节结论一致）
+
+一次「应用主题」点击在主线程内产生多条重建通道：
+
+1. `applyDayNight` → `initNightMode` → `AppConfig.isNightTheme` 缓存未同步 → 可能判错目标模式 → 触发额外/错误的 `setDefaultNightMode` 重建级联；
+2. `setDefaultNightMode` → uiMode 配置变化 → `App.onConfigurationChanged` → 再次 `applyDayNight` → 再次 `setDefaultNightMode`…… 形成**反馈环**（实测一次点击可产生 6 连发 RECREATE 广播，见第 12 节）；
+3. `postEvent(EventBus.RECREATE)` 同步派发 → 主题页 / MainActivity / ConfigActivity 各自 `recreate()`。
+
+在部分 OEM ROM（HyperOS 等）上，同主线程多窗口并发重建破坏窗口/输入状态 → 页面定格、触摸被残留层吞噬，仅系统 BACK 可响应；main 线程未阻塞（看门狗未触发），故「返回重进即恢复正常」。
+
+「背景图不显示」为该现象的伴随项：`setLegadoContent` 的背景图只在该 Activity 创建时一次性加载，重建被竞态打断后新实例的背景加载协程未跑完即被销毁，背景自然缺失。
+
+### 14.3 本次修复（第 7 轮落地）
+
+按第 5 节 5.1~5.4、第 8.2 节、第 11.2 节、第 12/13 节方案完整补齐代码（实现清单见 `docs/archive/主题列表应用主题后UI卡死修复计划（第七轮）.md`）：
+
+- `App onConfigurationChanged` 断开反馈环（不再 `setDefaultNightMode`，只刷新主题+防抖广播）；
+- `ThemeConfig.notifyRecreate()` 尾沿防抖广播（1.5s 静默窗口合并多路触发、窗口内新操作顺延），`applyDayNight` 与 legacy 片段统一走它；
+- Manifest：ThemeManageActivity / ConfigActivity 声明 `configChanges="uiMode"`；
+- `AppConfig.isNightTheme` setter 同步 `themeMode` 缓存并退出墨水屏模式；
+- `BaseComposeActivity` 重建合并守卫；ThemeManageActivity 覆写 `onConfigurationChanged → recreate()`；
+- `BaseActivity.upBackgroundImage` 解码+模糊移出主线程；
+- MainActivity / ConfigActivity 的 RECREATE 重建延后到 `onResume`（后台不并发重建）。
+
+> 本次谓词：修的是「应用主题时重建风暴/竞态」这条主线；背景图模糊耗时优化（小图放大模糊）与 `clearBg` 异步化属于性能项，不在本次范围。

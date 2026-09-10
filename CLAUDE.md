@@ -163,6 +163,8 @@ Conventional Commits 中文适配，husky + commitlint 自动校验不合规提�
 
 当任务明确匹配某个 skill 的应用场景时，应调用该 skill 检查。
 
+仓库内置技能镜像位于 `.claude/skills/`（含 `legado-*` 项目专属技能，清单与更新策略见该目录 README）；运行时以当前环境可加载的技能注册表为准。
+
 ## AI 探索项目的方式
 
 1. 先看本文件了解模块结构

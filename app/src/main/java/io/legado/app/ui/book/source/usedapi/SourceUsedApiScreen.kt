@@ -97,7 +97,7 @@ fun SourceUsedApiScreen(
                             tint = if (copyMode) {
                                 accentColor
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                Color.Unspecified
                             }
                         )
                     }

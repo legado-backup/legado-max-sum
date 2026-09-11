@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,10 +19,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -68,6 +73,8 @@ fun SourceUsedApiScreen(
     val context = LocalContext.current
     val accentColor = pageAccentColor()
     val secondaryTextColor = pageSecondaryTextColor()
+    var searchKey by rememberSaveable { mutableStateOf("") }
+    var searchVisible by rememberSaveable { mutableStateOf(false) }
     val onCopyName: (String) -> Unit = { name ->
         context.sendToClip(name)
         context.toastOnUi(context.getString(R.string.api_copied, name))
@@ -78,7 +85,22 @@ fun SourceUsedApiScreen(
             AppPageTopBar(
                 title = stringResource(R.string.source_used_api),
                 subtitle = (uiState as? SourceUsedApiUiState.Ready)?.sourceName,
-                onBackClick = onBackClick
+                onBackClick = onBackClick,
+                actions = {
+                    IconButton(onClick = {
+                        if (searchVisible || searchKey.isNotEmpty()) {
+                            searchKey = ""
+                            searchVisible = false
+                        } else {
+                            searchVisible = true
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = stringResource(R.string.action_search)
+                        )
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -110,6 +132,9 @@ fun SourceUsedApiScreen(
                     accentColor = accentColor,
                     secondaryTextColor = secondaryTextColor,
                     onCopyName = onCopyName,
+                    searchKey = searchKey,
+                    onSearchKeyChange = { searchKey = it },
+                    showSearchField = searchVisible || searchKey.isNotEmpty(),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -129,6 +154,9 @@ private fun ApiCatalogContent(
     accentColor: Color,
     secondaryTextColor: Color,
     onCopyName: (String) -> Unit,
+    searchKey: String,
+    onSearchKeyChange: (String) -> Unit,
+    showSearchField: Boolean,
     modifier: Modifier = Modifier
 ) {
     var showingUsed by rememberSaveable { mutableStateOf(true) }
@@ -136,10 +164,14 @@ private fun ApiCatalogContent(
     var collapsedTypes by remember { mutableStateOf(emptySet<ApiType>()) }
     val totalCount = categories.sumOf { it.items.size }
     val usedCount = categories.sumOf { it.usedCount }
+    val searchKeyTrim = searchKey.trim()
 
-    // 当前 Tab 下的分类（保留分类头，空分类跳过）
+    // 当前 Tab 与搜索词下的分类（保留分类头，空分类跳过）
     val visibleCategories = categories.mapNotNull { category ->
-        category.items.filter { it.used == showingUsed }
+        category.items.filter {
+            it.used == showingUsed &&
+                    (searchKeyTrim.isEmpty() || it.name.contains(searchKeyTrim, ignoreCase = true))
+        }
             .takeIf { it.isNotEmpty() }
             ?.let { category.copy(items = it) }
     }
@@ -174,6 +206,16 @@ private fun ApiCatalogContent(
                 .weight(1f),
             contentPadding = PaddingValues(bottom = navigationBarBottomInset)
         ) {
+            if (showSearchField) {
+                item {
+                    SourceUsedApiSearchField(
+                        query = searchKey,
+                        onQueryChange = onSearchKeyChange,
+                        accentColor = accentColor
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
             if (visibleCategories.isEmpty()) {
                 item {
                     Box(
@@ -221,7 +263,7 @@ private fun ApiCatalogContent(
 }
 
 /**
- * 分类标题行（可点击折叠/展开）：左侧分类名，右侧条目数与展开箭头。
+ * 分类标题行（可点击折叠 / 展开）：左侧分类名，右侧条目数与展开箭头。
  */
 @Composable
 private fun CategoryHeader(
@@ -316,4 +358,35 @@ private fun ApiItemRow(
             )
         }
     }
+}
+
+/**
+ * API 名称搜索框，样式与书源检测页保持一致。
+ */
+@Composable
+private fun SourceUsedApiSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    accentColor: Color
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
+        leadingIcon = {
+            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.action_search))
+        },
+        placeholder = {
+            Text(stringResource(R.string.action_search))
+        },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = accentColor,
+            focusedLeadingIconColor = accentColor,
+            cursorColor = accentColor
+        )
+    )
 }

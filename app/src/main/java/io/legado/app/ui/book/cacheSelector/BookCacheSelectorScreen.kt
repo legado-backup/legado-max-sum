@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -31,8 +30,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -46,16 +43,15 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.R
 import io.legado.app.ui.book.cacheSelector.components.BookCacheItemCard
 import io.legado.app.ui.theme.pageCardContainerColor
+import io.legado.app.ui.widget.components.AppPageTopBar
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.navigationBarBottomInset
 import io.legado.app.utils.ConvertUtils
 
-@Suppress("LegadoUiViolation")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookCacheSelectorScreen(
@@ -73,7 +69,6 @@ fun BookCacheSelectorScreen(
     var searchVisible by rememberSaveable { mutableStateOf(false) }
 
     val accentColor = cacheSelectorAccentColor()
-    val topBarColor = pageCardContainerColor()
     val visibleBookItems = bookItems.filter { item ->
         searchKey.isBlank() ||
                 item.book.name.contains(searchKey, ignoreCase = true) ||
@@ -83,30 +78,9 @@ fun BookCacheSelectorScreen(
 
     AppScaffold(
         topBar = {
-            // TODO(连体顶栏): 容器色为 pageCardContainerColor 且内容色用 onSurface，
-            // 与 AppPageTopBar 的 pageTopBarColors 契约不符；待共享组件支持连体色调参数后迁移
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = topBarColor,
-                    scrolledContainerColor = topBarColor,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                title = {
-                    Text(
-                        text = stringResource(R.string.bcs_title),
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
-                    }
-                },
+            AppPageTopBar(
+                title = stringResource(R.string.bcs_title),
+                onBackClick = onBackClick,
                 actions = {
                     IconButton(onClick = {
                         if (searchVisible || searchKey.isNotEmpty()) {

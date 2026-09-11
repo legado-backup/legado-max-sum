@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.help.config.CoverHtmlTemplateConfig
 import io.legado.app.constant.EventBus
+import io.legado.app.ui.widget.components.AppPageTopBar
 import io.legado.app.ui.widget.components.AppScaffold
 import io.legado.app.ui.widget.components.navigationBarBottomInset
 import io.legado.app.ui.widget.image.CoverImageView
@@ -35,7 +36,6 @@ import io.legado.app.utils.toastOnUi
  * @param onBackClick 返回点击回调
  * @param onEditTemplate 编辑模板回调，参数为模板对象，为空表示新建
  */
-@Suppress("LegadoUiViolation")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoverHtmlTemplateListScreen(
@@ -47,7 +47,6 @@ fun CoverHtmlTemplateListScreen(
     var selectedId by remember { mutableStateOf(CoverHtmlTemplateConfig.getSelectedTemplate().id) }
     
     val containerColor = coverHtmlCardContainerColor()
-    val topBarColor = coverHtmlTopBarContainerColor()
     
     /**
      * 刷新模板列表
@@ -59,31 +58,14 @@ fun CoverHtmlTemplateListScreen(
     
     AppScaffold(
         topBar = {
-            // TODO(连体顶栏): 容器色为 coverHtmlTopBarContainerColor 且用 onSurface/Bold，
-            // 与 AppPageTopBar 的 pageTopBarColors 契约不符；待共享组件支持连体色调后迁移
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = topBarColor,
-                    scrolledContainerColor = topBarColor,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                title = {
-                    Text(
-                        text = stringResource(R.string.cover_html_template),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.Close, contentDescription = "关闭")
-                    }
-                },
+            AppPageTopBar(
+                title = stringResource(R.string.cover_html_template),
+                onBackClick = onBackClick,
+                backIcon = Icons.Default.Close,
+                backContentDescription = stringResource(R.string.close),
                 actions = {
                     IconButton(onClick = { onEditTemplate(null) }) {
-                        Icon(Icons.Default.Add, contentDescription = "新建")
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add))
                     }
                 }
             )
@@ -257,17 +239,6 @@ private fun TemplateItem(
 fun coverHtmlCardContainerColor(): Color {
     val background = MaterialTheme.colorScheme.background
     val alpha = if (background.luminance() > 0.5f) 0.9f else 0.9f
-    return MaterialTheme.colorScheme.surface.copy(alpha = alpha)
-}
-
-/**
- * 封面HTML顶部栏容器颜色
- * 根据背景亮度自适应调整透明度
- */
-@Composable
-fun coverHtmlTopBarContainerColor(): Color {
-    val background = MaterialTheme.colorScheme.background
-    val alpha = if (background.luminance() > 0.5f) 0.82f else 0.94f
     return MaterialTheme.colorScheme.surface.copy(alpha = alpha)
 }
 

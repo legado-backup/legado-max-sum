@@ -1336,6 +1336,7 @@
     <string name="clipboard_import_remember">記住我的選擇</string>
     <string name="clipboard_import_auto_toast">已自動讀取剪貼簿中的匯入口令</string>
     <string name="cover_html_code">封面 HTML 程式碼</string>
+    <string name="cover_html_template">封面 HTML 範本</string>
     <string name="cover_html_code_summary">自訂封面 HTML 程式碼</string>
     <string name="cover_html_enable">啟用封面 HTML</string>
     <string name="cover_html_enable_summary">使用 HTML 產生預設封面</string>

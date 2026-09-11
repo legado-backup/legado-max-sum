@@ -5,6 +5,7 @@ import io.legado.app.data.dao.ReadRecordDao
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
+import io.legado.app.data.entities.readRecord.ReadRecordSessionDisplay
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.constant.AppConst
 import kotlinx.coroutines.Dispatchers
@@ -206,7 +207,7 @@ class ReadRecordRepository(
                     // 合并后的展示时段端点跨度包含暂停间隙，直接求和会虚高
                     ReadRecordTimelineDay(
                         date = dateFormat.format(Date(daySessions.minOf { it.startTime })),
-                        sessions = mergeCloseSessions(daySessions).sortedByDescending { it.startTime },
+                        sessions = mergeCloseSessions(daySessions).sortedByDescending { it.session.startTime },
                         readTime = daySessions.sumOf { (it.endTime - it.startTime).coerceAtLeast(0L) }
                     )
                 }
@@ -218,24 +219,41 @@ class ReadRecordRepository(
     /**
      * 合并同一天内间隔 ≤ [gap] 的相邻会话（翻页高频上报产生的碎片）。
      * gap 传 0 时只合并首尾相接/重叠的片段，合并前后时长总和不变。
+     *
+     * 返回值携带 [ReadRecordSessionDisplay.readTime]（各碎片时长之和，不含合并间隙），
+     * 展示时长一律用它而非合并区间的端点跨度。
      */
-    private fun mergeCloseSessions(sessions: List<ReadRecordSession>, gap: Long = SESSION_MERGE_GAP): List<ReadRecordSession> {
+    private fun mergeCloseSessions(sessions: List<ReadRecordSession>, gap: Long = SESSION_MERGE_GAP): List<ReadRecordSessionDisplay> {
         if (sessions.isEmpty()) return emptyList()
         val sorted = sessions.sortedBy { it.startTime }
-        val merged = mutableListOf<ReadRecordSession>()
-        merged.add(sorted.first().copy())
+        val merged = mutableListOf<ReadRecordSessionDisplay>()
+        val first = sorted.first()
+        merged.add(
+            ReadRecordSessionDisplay(
+                session = first.copy(),
+                readTime = (first.endTime - first.startTime).coerceAtLeast(0L)
+            )
+        )
         for (i in 1 until sorted.size) {
             val current = sorted[i]
             val last = merged.last()
-            if ((current.startTime - last.endTime) <= gap) {
+            if ((current.startTime - last.session.endTime) <= gap) {
                 merged[merged.lastIndex] = last.copy(
-                    endTime = max(current.endTime, last.endTime),
-                    words = last.words + current.words,
-                    // 章节名取最新碎片：连续阅读时碎片会不断合并，必须跟随最后读到的章节
-                    durChapterTitle = current.durChapterTitle.ifBlank { last.durChapterTitle }
+                    session = last.session.copy(
+                        endTime = max(current.endTime, last.session.endTime),
+                        words = last.session.words + current.words,
+                        // 章节名取最新碎片：连续阅读时碎片会不断合并，必须跟随最后读到的章节
+                        durChapterTitle = current.durChapterTitle.ifBlank { last.session.durChapterTitle }
+                    ),
+                    readTime = last.readTime + (current.endTime - current.startTime).coerceAtLeast(0L)
                 )
             } else {
-                merged.add(current.copy())
+                merged.add(
+                    ReadRecordSessionDisplay(
+                        session = current.copy(),
+                        readTime = (current.endTime - current.startTime).coerceAtLeast(0L)
+                    )
+                )
             }
         }
         return merged
@@ -641,8 +659,9 @@ class ReadRecordRepository(
                 .flatMap { (_, daySessions) -> mergeCloseSessions(daySessions, gap = 0L) }
             if (merged.size < sessions.size) {
                 // 先按原 id REPLACE 合并后的会话，再删除被吸收的碎片，任一步中断重跑即可收敛
-                dao.insertAllSessions(merged)
-                val mergedIds = merged.map { it.id }.toSet()
+                val mergedSessions = merged.map { it.session }
+                dao.insertAllSessions(mergedSessions)
+                val mergedIds = mergedSessions.map { it.id }.toSet()
                 dao.deleteSessionsByIds(sessions.map { it.id }.filter { it !in mergedIds })
             }
         }

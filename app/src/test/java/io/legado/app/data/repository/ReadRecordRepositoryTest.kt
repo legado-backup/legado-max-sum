@@ -193,13 +193,14 @@ class ReadRecordRepositoryTest {
 
         assertEquals(1, days.size)
         assertEquals(1, days[0].sessions.size)
-        assertEquals(1_000L, days[0].sessions[0].startTime)
-        assertEquals(60_000L, days[0].sessions[0].endTime)
-        assertEquals(170L, days[0].sessions[0].words)
+        assertEquals(1_000L, days[0].sessions[0].session.startTime)
+        assertEquals(60_000L, days[0].sessions[0].session.endTime)
+        assertEquals(170L, days[0].sessions[0].session.words)
         // 合并后的会话应显示最后读到的章节，而不是开始阅读的章节
-        assertEquals("第三章", days[0].sessions[0].durChapterTitle)
-        // readTime 按未合并的原始会话求和（29s + 15s + 15s）
+        assertEquals("第三章", days[0].sessions[0].session.durChapterTitle)
+        // readTime 按未合并的原始会话求和（29s + 15s + 15s），行时长与日合计一致
         assertEquals(59_000L, days[0].readTime)
+        assertEquals(59_000L, days[0].sessions[0].readTime)
     }
 
     @Test
@@ -220,9 +221,10 @@ class ReadRecordRepositoryTest {
 
         assertEquals(1, days.size)
         assertEquals(1, days[0].sessions.size)
-        // 日合计必须用真实阅读时长（60s + 30s = 90s），
+        // 日合计与行时长都必须用真实阅读时长（60s + 30s = 90s），
         // 而非合并后时段的端点跨度（6 分钟间隙会被计入，虚高为 420s）
         assertEquals(90_000L, days[0].readTime)
+        assertEquals(90_000L, days[0].sessions[0].readTime)
     }
 
     @Test
@@ -243,6 +245,10 @@ class ReadRecordRepositoryTest {
 
         assertEquals(1, days.size)
         assertEquals(2, days[0].sessions.size)
+        // 不合并时行时长即真实时长，行时长之和等于日合计（行按时间降序排列）
+        assertEquals(30_000L, days[0].sessions[0].readTime)
+        assertEquals(60_000L, days[0].sessions[1].readTime)
+        assertEquals(90_000L, days[0].readTime)
     }
 
     @Test

@@ -351,9 +351,9 @@ private fun DaySection(
                 modifier = Modifier.padding(top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                sessions.forEach { session ->
-                    val duration = (session.endTime - session.startTime).coerceAtLeast(0L)
-                    SessionRow(session, timeFormat, duration)
+                sessions.forEach { item ->
+                    // 行时长用该时段内的真实阅读时长（不含合并间隙），保证行时长之和等于日合计
+                    SessionRow(item.session, timeFormat, item.readTime)
                 }
             }
         }

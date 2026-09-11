@@ -143,6 +143,16 @@ Conventional Commits 中文适配，husky + commitlint 自动校验不合规提�
 - **帮助文档同步门禁（pre-commit）**：改了受管代码区域（映射表 `docs/help-doc-sync/map.json`，脚本 `scripts/help-doc-sync.mjs`）但没同步改对应 md，commit 会被拦下并给提示；确认本次改动不涉及文档内容时可用 `SKIP_DOC_SYNC=1 git commit ...` 逃生；扩展映射只需编辑 map.json，无需改脚本。
 - 详细规范、反例与常见问题见 `docs/git-hook/`。
 
+### AI 与危险 git 命令（强制）
+
+以下命令属于**不可逆或影响共享历史**的操作，AI **一律不得自动执行**；确需执行时必须先说明原因、取得用户明确授权后才可继续：
+
+- **push 相关**：`git push`、`git push --force` / `-f` / `--force-with-lease`；禁止直接推送 `main` / `master`。
+- **历史改写**：`git reset --hard`、`git rebase`、`git commit --amend`。
+- **工作区破坏**：`git clean -fd`、`git checkout -- <file>`、`git restore <file>` 等会覆盖未提交改动的操作。
+
+硬拦截由 `.husky/pre-push` 兜底（拦 `main` / `master` 与 non-fast-forward）。`reset --hard` / `clean` / `checkout` / `restore` **没有任何 git hook 可以拦截**，只能依赖本约定。
+
 ## 核心规则
 
 1. **Check Skills First**: 开始任务前，必须检查是否有匹配的 Skill。
@@ -185,3 +195,4 @@ Conventional Commits 中文适配，husky + commitlint 自动校验不合规提�
 - 默认尊重 `.gitignore`，不会把 `build/` / `.gradle/` / `node_modules/` 的生成物卷进结果，速度也快得多
 - 常见用法：`rg "关键词" app/src/main/java`（只列文件名加 `-l`，带上下文加 `-C 3`）
 - 环境里没有 rg 时退回 `grep -rn` / `find ... | grep`，不必强装；Windows 上可顺手装：`winget install BurntSushi.ripgrep` 或 `scoop install ripgrep`
+- 搜索文件或文本优先使用 `rg`、`rg --files`； 独立的读取和查询尽量批量执行

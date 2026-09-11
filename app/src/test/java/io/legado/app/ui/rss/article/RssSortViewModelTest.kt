@@ -32,12 +32,16 @@ class RssSortViewModelTest {
     private fun record(record: String, origin: String) =
         RssReadRecord(record = record, origin = origin)
 
+    /** 注入与 Main 共享时钟的测试调度器，保证 advanceUntilIdle 收敛 body 队列 */
+    private fun newViewModel(repository: FakeRssSortRepository) =
+        RssSortViewModel(repository, StandardTestDispatcher(mainDispatcherRule.dispatcher.scheduler))
+
     @Test
     fun `initData 加载已存在源并设置各字段`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeRssSortRepository().apply {
             sources["url1"] = source("url1", style = 2, name = "源A")
         }
-        val viewModel = RssSortViewModel(repository)
+        val viewModel = newViewModel(repository)
         val intent = mockk<Intent>().apply {
             every { getStringExtra("sourceUrl") } returns "url1"
             every { getStringExtra("sortUrl") } returns "sort-2"
@@ -59,7 +63,7 @@ class RssSortViewModelTest {
     @Test
     fun `initData 未知源回退为新建源`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeRssSortRepository()
-        val viewModel = RssSortViewModel(repository)
+        val viewModel = newViewModel(repository)
         val intent = mockk<Intent>().apply {
             every { getStringExtra("sourceUrl") } returns "no-such"
             every { getStringExtra("sortUrl") } returns null
@@ -80,7 +84,7 @@ class RssSortViewModelTest {
     @Test
     fun `switchLayout 样式递进到 4 后回绕为 0`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeRssSortRepository()
-        val viewModel = RssSortViewModel(repository)
+        val viewModel = newViewModel(repository)
         viewModel.rssSource = source("url1", style = 3)
 
         viewModel.switchLayout()
@@ -99,7 +103,7 @@ class RssSortViewModelTest {
     @Test
     fun `switchLayout 未加载源时不更新数据源`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeRssSortRepository()
-        val viewModel = RssSortViewModel(repository)
+        val viewModel = newViewModel(repository)
 
         viewModel.switchLayout()
         advanceUntilIdle()
@@ -110,7 +114,7 @@ class RssSortViewModelTest {
     @Test
     fun `clearArticles 清空该源文章并重置序号`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeRssSortRepository()
-        val viewModel = RssSortViewModel(repository)
+        val viewModel = newViewModel(repository)
         viewModel.url = "url1"
         val oldOrder = viewModel.order
 
@@ -128,7 +132,7 @@ class RssSortViewModelTest {
             records += record("r2", "o1")
             records += record("r3", "o2")
         }
-        val viewModel = RssSortViewModel(repository)
+        val viewModel = newViewModel(repository)
 
         assertEquals(2, viewModel.countRecords("o1"))
         assertEquals(3, viewModel.countRecords())
@@ -138,7 +142,7 @@ class RssSortViewModelTest {
     @Test
     fun `deleteAllRecord 支持全部与按源删除`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeRssSortRepository()
-        val viewModel = RssSortViewModel(repository)
+        val viewModel = newViewModel(repository)
 
         viewModel.deleteAllRecord()
         viewModel.deleteAllRecord("o1")
@@ -150,7 +154,7 @@ class RssSortViewModelTest {
     @Test
     fun `clearArticles 无 url 时只重置序号`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeRssSortRepository()
-        val viewModel = RssSortViewModel(repository)
+        val viewModel = newViewModel(repository)
         val oldOrder = viewModel.order
 
         viewModel.clearArticles()

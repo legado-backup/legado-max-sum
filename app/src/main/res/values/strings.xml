@@ -1079,6 +1079,13 @@
     <string name="export_to_web_dav">Export to WebDav</string>
     <string name="reverse_content">Reverse content</string>
     <string name="debug">Debug</string>
+    <string name="source_used_api">Source Used API</string>
+    <string name="api_category_variable">Built-in Variables</string>
+    <string name="api_category_function">Built-in Functions</string>
+    <string name="api_category_source_method">Source Methods</string>
+    <string name="api_used">Used</string>
+    <string name="api_copied">Copied "%1$s"</string>
+    <string name="api_source_not_found">Source not found</string>
     <string name="crash_log">Crash log</string>
     <string name="use_zh_layout">Custom Chinese line feed</string>
     <string name="image_style">Style of Images</string>

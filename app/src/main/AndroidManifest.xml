@@ -427,6 +427,11 @@
             android:name=".ui.book.source.check.CheckSourceActivity"
             android:configChanges="orientation|screenSize"
             android:hardwareAccelerated="true" />
+        <!-- 源所用API -->
+        <activity
+            android:name=".ui.book.source.usedapi.SourceUsedApiActivity"
+            android:configChanges="orientation|screenSize"
+            android:hardwareAccelerated="true" />
         <!-- HTML封面模板配置 -->
         <activity
             android:name=".ui.config.coverhtml.CoverHtmlActivity"

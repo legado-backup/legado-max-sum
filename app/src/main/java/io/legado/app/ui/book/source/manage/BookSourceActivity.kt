@@ -41,6 +41,7 @@ import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
+import io.legado.app.ui.book.source.usedapi.SourceUsedApiActivity
 import io.legado.app.ui.browser.WebViewActivity
 import io.legado.app.ui.config.CheckSourceConfig
 import io.legado.app.ui.file.HandleFileContract
@@ -811,6 +812,12 @@ sendToClip(text)
     override fun debug(bookSource: BookSourcePart) {
         startActivity<BookSourceDebugActivity> {
             putExtra("key", bookSource.bookSourceUrl)
+        }
+    }
+
+    override fun showUsedApi(bookSource: BookSourcePart) {
+        startActivity<SourceUsedApiActivity> {
+            putExtra("sourceUrl", bookSource.bookSourceUrl)
         }
     }
 

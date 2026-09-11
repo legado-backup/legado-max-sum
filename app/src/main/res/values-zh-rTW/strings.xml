@@ -904,6 +904,13 @@
     <string name="export_to_web_dav">匯出到WebDav</string>
     <string name="reverse_content">反轉內容</string>
     <string name="debug">除錯</string>
+    <string name="source_used_api">源所用API</string>
+    <string name="api_category_variable">內建變數</string>
+    <string name="api_category_function">內建函數</string>
+    <string name="api_category_source_method">源物件方法</string>
+    <string name="api_used">已使用</string>
+    <string name="api_copied">已複製「%1$s」</string>
+    <string name="api_source_not_found">找不到該書源</string>
     <string name="crash_log">當機日誌</string>
     <string name="use_zh_layout">使用自訂中文分行</string>
     <string name="image_style">圖片樣式</string>

@@ -2,7 +2,7 @@ package io.legado.app.ui.book.read.config.highlight
 
 import io.legado.app.utils.RegexCache
 
-//数据模型
+// 数据模型
 data class HighlightRule(
     var id: String = System.currentTimeMillis().toString(),
     var name: String = "",
@@ -18,6 +18,8 @@ data class HighlightRule(
     var underlineWidth: Float = 1f,
     var underlineOffset: Float = 2f,
     var underlineSvgPath: String? = null,
+    /** 高亮字体路径（FileDoc 字符串），为空时跟随阅读字体 */
+    var font: String? = null,
     var bgColor: Int? = null,
     var bgImage: String? = null,
     var bgImageFit: Int = 0,
@@ -62,8 +64,11 @@ data class HighlightRule(
                     7 -> "斜体"
                     8 -> "方框"
                     else -> "下划线"
-                } + underlineColor?.let { " ${it.toHexColor()}" }.orEmpty()
+                } + underlineColor?.let { " ${it.toHexColor()}" }.orEmpty(),
             )
+        }
+        if (!font.isNullOrBlank()) {
+            parts.add("字体 ${fontDisplayName()}")
         }
         if (!bgImage.isNullOrBlank()) {
             parts.add(
@@ -71,7 +76,7 @@ data class HighlightRule(
                     1 -> "背景图(拉伸)"
                     2 -> "背景图(裁剪)"
                     else -> "背景图(平铺)"
-                }
+                },
             )
         } else if (bgColor != null) {
             parts.add("背景色 ${bgColor!!.toHexColor()}")
@@ -82,46 +87,47 @@ data class HighlightRule(
         return parts.joinToString(" / ")
     }
 
-    fun targetScopeLabel(): String {
-        return when (targetScope) {
-            TARGET_TITLE -> "作用于标题"
-            TARGET_BODY -> "作用于正文"
-            else -> "作用于全部"
-        }
+    /**
+     * 从字体路径中提取展示用的文件名。
+     * content:// 形式的 FileDoc 路径经过 URL 编码（如 %20），展示前需解码。
+     */
+    fun fontDisplayName(): String {
+        val fontPath = font ?: return ""
+        if (fontPath.isBlank()) return ""
+        val decoded = runCatching {
+            java.net.URLDecoder.decode(fontPath, "utf-8")
+        }.getOrNull() ?: fontPath
+        return decoded.substringAfterLast('/').substringAfterLast('\\').ifBlank { fontPath }
     }
 
-    fun themeScopeLabel(): String {
-        return when (themeScope) {
-            THEME_LIGHT -> "仅亮色"
-            THEME_DARK -> "仅暗色"
-            else -> "亮暗色"
-        }
+    fun targetScopeLabel(): String = when (targetScope) {
+        TARGET_TITLE -> "作用于标题"
+        TARGET_BODY -> "作用于正文"
+        else -> "作用于全部"
     }
 
-    fun displayPattern(): String {
-        return pattern.ifBlank { ".*" }
+    fun themeScopeLabel(): String = when (themeScope) {
+        THEME_LIGHT -> "仅亮色"
+        THEME_DARK -> "仅暗色"
+        else -> "亮暗色"
     }
+
+    fun displayPattern(): String = pattern.ifBlank { ".*" }
 
     // 转换为正则表达式（使用全局缓存，避免重复编译）
-    fun toRegex(): Regex {
-        return if (isRegex) {
-            RegexCache.getOrCompile(pattern)
-        } else {
-            // 非正则模式：转义后作为字面量匹配，缓存键加前缀避免与正则模式冲突
-            RegexCache.getOrCompile("LITERAL:" + pattern) { Regex(Regex.escape(pattern)) }
-        }
+    fun toRegex(): Regex = if (isRegex) {
+        RegexCache.getOrCompile(pattern)
+    } else {
+        // 非正则模式：转义后作为字面量匹配，缓存键加前缀避免与正则模式冲突
+        RegexCache.getOrCompile("LITERAL:" + pattern) { Regex(Regex.escape(pattern)) }
     }
 
     // 格式化样本文本，确保在显示时正确换行
-    fun normalizedSampleText(): String {
-        return sampleText.ifBlank {
-            "她轻声说：\"今晚就出发。\"\n他说：“明天见。”\n最近在重读《百年孤独》（纪念版），节奏依然很稳。"
-        }
+    fun normalizedSampleText(): String = sampleText.ifBlank {
+        "她轻声说：\"今晚就出发。\"\n他说：“明天见。”\n最近在重读《百年孤独》（纪念版），节奏依然很稳。"
     }
 
-    fun copyWithNewId(): HighlightRule {
-        return copy(id = "${System.currentTimeMillis()}_${name.hashCode()}")
-    }
+    fun copyWithNewId(): HighlightRule = copy(id = "${System.currentTimeMillis()}_${name.hashCode()}")
 
     /**
      * 判断规则是否对指定书籍生效

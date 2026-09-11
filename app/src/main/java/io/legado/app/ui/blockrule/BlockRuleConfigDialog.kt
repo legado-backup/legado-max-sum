@@ -11,11 +11,17 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -114,24 +120,22 @@ class BlockRuleConfigDialog : DialogFragment() {
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setContent {
-                LegadoTheme {
-                    BlockRuleConfigContent(
-                        sourceUrl = sourceUrl,
-                        allBooks = allBooks,
-                        allRssArticles = allRssArticles,
-                        onDismiss = { dismissAllowingStateLoss() },
-                        onRulesChanged = {
-                            onRulesChanged?.invoke()
-                        },
-                        onShowProgressChanged = { show ->
-                            onShowProgressChanged?.invoke(show)
-                        }
-                    )
-                }
+        savedInstanceState: Bundle?,
+    ): View = ComposeView(requireContext()).apply {
+        setContent {
+            LegadoTheme {
+                BlockRuleConfigContent(
+                    sourceUrl = sourceUrl,
+                    allBooks = allBooks,
+                    allRssArticles = allRssArticles,
+                    onDismiss = { dismissAllowingStateLoss() },
+                    onRulesChanged = {
+                        onRulesChanged?.invoke()
+                    },
+                    onShowProgressChanged = { show ->
+                        onShowProgressChanged?.invoke(show)
+                    },
+                )
             }
         }
     }
@@ -149,7 +153,7 @@ private fun BlockRuleConfigContent(
     allRssArticles: List<RssArticle>,
     onDismiss: () -> Unit,
     onRulesChanged: () -> Unit,
-    onShowProgressChanged: (Boolean) -> Unit
+    onShowProgressChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     var rules by remember { mutableStateOf<List<BlockRule>>(BlockRuleStore.load(context)) }
@@ -206,7 +210,7 @@ private fun BlockRuleConfigContent(
             },
             dismissButton = {
                 TextButton(onClick = { deletingRule = null }) { Text(stringResource(android.R.string.cancel)) }
-            }
+            },
         )
     }
 
@@ -225,7 +229,7 @@ private fun BlockRuleConfigContent(
                 saveRules(newRules)
                 editingRule = null
             },
-            onDismiss = { editingRule = null }
+            onDismiss = { editingRule = null },
         )
     }
 
@@ -259,25 +263,35 @@ private fun BlockRuleConfigContent(
                 saveRules(newRules)
                 if (currentGroup == name) currentGroup = null
             },
-            onDismiss = { showGroupManage = false }
+            onDismiss = { showGroupManage = false },
         )
     }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = pageCardContainerColor()
+        containerColor = pageCardContainerColor(),
+        // 只保留 Bottom 侧 insets：M3 默认的 safeDrawing(Top+Bottom) 中 Top 部分会因
+        // ModalBottomSheet 内部 consumeWindowInsets(top = sheetState.offset) 随 offset 变化，
+        // 导致内容顶 padding → sheet 高度 → Expanded 锚点(fullHeight-sheetHeight) 联动。
+        // 规则较多时内容高度接近满屏，形成正反馈，滑动列表时整个弹窗持续上下抖动；
+        // 去掉 Top 侧即可切断该反馈回路。
+        contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom) },
     ) {
+        // 顶部用不受消耗链影响的静态状态栏高度补偿（asPaddingValues 不扣除
+        // consumeWindowInsets 传入的 offset），满屏时标题不会顶到状态栏下
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(top = statusBarTop)
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 32.dp),
         ) {
             // Top bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "关闭")
@@ -286,11 +300,11 @@ private fun BlockRuleConfigContent(
                     text = stringResource(R.string.explore_block_rule_config),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = {
                     editingRule = BlockRule(
-                        group = currentGroup ?: BlockRuleGroupStore.DEFAULT_GROUP
+                        group = currentGroup ?: BlockRuleGroupStore.DEFAULT_GROUP,
                     )
                 }) {
                     Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.explore_block_rule_add))
@@ -301,28 +315,28 @@ private fun BlockRuleConfigContent(
                     }
                     DropdownMenu(
                         expanded = showMoreMenu,
-                        onDismissRequest = { showMoreMenu = false }
+                        onDismissRequest = { showMoreMenu = false },
                     ) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.explore_block_rule_group_manage)) },
                             onClick = {
                                 showMoreMenu = false
                                 showGroupManage = true
-                            }
+                            },
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.explore_block_rule_import_success).replace("成功", "")) },
                             onClick = {
                                 showMoreMenu = false
                                 importFromClipboard(context) { refresh() }
-                            }
+                            },
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.explore_block_rule_export_success).replace("已复制到剪贴板", "导出")) },
                             onClick = {
                                 showMoreMenu = false
                                 exportToClipboard(context, filteredRules)
-                            }
+                            },
                         )
                     }
                 }
@@ -347,18 +361,18 @@ private fun BlockRuleConfigContent(
             if (allFilterGroups.size > 1 || allFilterGroups.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     FilterChip(
                         selected = currentGroup == null,
                         onClick = { currentGroup = null },
-                        label = { Text(stringResource(R.string.explore_block_rule_scope_all)) }
+                        label = { Text(stringResource(R.string.explore_block_rule_scope_all)) },
                     )
                     allFilterGroups.forEach { group ->
                         FilterChip(
                             selected = currentGroup == group,
                             onClick = { currentGroup = group },
-                            label = { Text(group) }
+                            label = { Text(group) },
                         )
                     }
                 }
@@ -368,12 +382,12 @@ private fun BlockRuleConfigContent(
             // ===== 屏蔽规则总控开关 =====
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(R.string.explore_block_rule_enable_master),
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Switch(
                     checked = masterEnabled,
@@ -382,7 +396,7 @@ private fun BlockRuleConfigContent(
                         context.putPrefBoolean(PreferKey.blockRuleEnabled, enabled)
                         BlockRuleStore.invalidateCache()
                         onRulesChanged()
-                    }
+                    },
                 )
             }
 
@@ -391,12 +405,12 @@ private fun BlockRuleConfigContent(
             // 显示屏蔽进度开关 + 开启屏蔽规则后起效的规则按钮
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(R.string.explore_block_rule_show_progress),
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Switch(
                     checked = showProgress,
@@ -404,7 +418,7 @@ private fun BlockRuleConfigContent(
                         showProgress = it
                         context.putPrefBoolean(PreferKey.blockRuleShowProgress, it)
                         onShowProgressChanged(it)
-                    }
+                    },
                 )
             }
             Row(
@@ -412,13 +426,13 @@ private fun BlockRuleConfigContent(
                     .fillMaxWidth()
                     .clickable { showActiveRules = true }
                     .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(R.string.explore_block_rule_active_rules),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = pageAccentColor()
+                    color = pageAccentColor(),
                 )
                 val currentMatchedRules = if (allRssArticles.isNotEmpty()) {
                     BlockRuleStore.getMatchedRssRules(context, allRssArticles, sourceUrl)
@@ -428,7 +442,7 @@ private fun BlockRuleConfigContent(
                 Text(
                     text = "${currentMatchedRules.size}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = pageSecondaryTextColor()
+                    color = pageSecondaryTextColor(),
                 )
             }
 
@@ -439,11 +453,11 @@ private fun BlockRuleConfigContent(
                 Text(
                     text = stringResource(R.string.explore_block_rule_empty),
                     modifier = Modifier.padding(18.dp),
-                    color = pageSecondaryTextColor()
+                    color = pageSecondaryTextColor(),
                 )
             } else {
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 480.dp)
+                    modifier = Modifier.heightIn(max = 480.dp),
                 ) {
                     items(filteredRules, key = { it.id }) { rule ->
                         BlockRuleItem(
@@ -457,7 +471,7 @@ private fun BlockRuleConfigContent(
                                 saveRules(newRules)
                             },
                             onEdit = { editingRule = rule },
-                            onDelete = { deletingRule = rule }
+                            onDelete = { deletingRule = rule },
                         )
                         HorizontalDivider()
                     }
@@ -480,7 +494,7 @@ private fun BlockRuleConfigContent(
                 if (activeMatchedRules.isEmpty()) {
                     Text(
                         text = stringResource(R.string.explore_block_rule_active_rules_empty),
-                        color = pageSecondaryTextColor()
+                        color = pageSecondaryTextColor(),
                     )
                 } else if (allRssArticles.isNotEmpty()) {
                     LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
@@ -504,7 +518,7 @@ private fun BlockRuleConfigContent(
             },
             confirmButton = {
                 TextButton(onClick = { showActiveRules = false }) { Text(stringResource(android.R.string.ok)) }
-            }
+            },
         )
     }
 }
@@ -513,7 +527,7 @@ private fun BlockRuleConfigContent(
 @Composable
 private fun ActiveRuleItem(
     rule: BlockRule,
-    matchedBooks: List<SearchBook>
+    matchedBooks: List<SearchBook>,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -524,26 +538,26 @@ private fun ActiveRuleItem(
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
                 .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = rule.name.ifBlank { rule.pattern },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
                 Text(
                     text = "${rule.modeLabel()} / ${rule.scopeSummary()} / 匹配${matchedBooks.size}本",
                     style = MaterialTheme.typography.bodySmall,
-                    color = pageSecondaryTextColor()
+                    color = pageSecondaryTextColor(),
                 )
             }
             Icon(
                 imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = if (expanded) "收起" else "展开",
                 modifier = Modifier.size(20.dp),
-                tint = pageSecondaryTextColor()
+                tint = pageSecondaryTextColor(),
             )
         }
 
@@ -555,14 +569,14 @@ private fun ActiveRuleItem(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = "《${book.name}》",
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
                         )
                         if (book.author.isNotBlank()) {
                             Text(
@@ -570,7 +584,7 @@ private fun ActiveRuleItem(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = pageSecondaryTextColor()
+                                color = pageSecondaryTextColor(),
                             )
                         }
                     }
@@ -584,7 +598,7 @@ private fun ActiveRuleItem(
 @Composable
 private fun ActiveRssRuleItem(
     rule: BlockRule,
-    matchedArticles: List<RssArticle>
+    matchedArticles: List<RssArticle>,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -595,26 +609,26 @@ private fun ActiveRssRuleItem(
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
                 .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = rule.name.ifBlank { rule.pattern },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
                 Text(
                     text = "${rule.modeLabel()} / ${rule.scopeSummary()} / 匹配${matchedArticles.size}条",
                     style = MaterialTheme.typography.bodySmall,
-                    color = pageSecondaryTextColor()
+                    color = pageSecondaryTextColor(),
                 )
             }
             Icon(
                 imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = if (expanded) "收起" else "展开",
                 modifier = Modifier.size(20.dp),
-                tint = pageSecondaryTextColor()
+                tint = pageSecondaryTextColor(),
             )
         }
 
@@ -626,14 +640,14 @@ private fun ActiveRssRuleItem(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = article.title.ifBlank { article.link },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
                         )
                         if (!article.pubDate.isNullOrBlank()) {
                             Text(
@@ -641,7 +655,7 @@ private fun ActiveRssRuleItem(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = pageSecondaryTextColor()
+                                color = pageSecondaryTextColor(),
                             )
                         }
                     }
@@ -659,7 +673,7 @@ private fun BlockRuleItem(
     allRssSources: List<RssSourceLite>,
     onToggleEnabled: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     ListItem(
         headlineContent = {
@@ -667,7 +681,7 @@ private fun BlockRuleItem(
                 text = rule.name.ifBlank { rule.pattern },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
         },
         supportingContent = {
@@ -675,7 +689,7 @@ private fun BlockRuleItem(
                 Text(
                     text = "${rule.modeLabel()} / ${rule.scopeSummary()} / ${rule.group}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = pageSecondaryTextColor()
+                    color = pageSecondaryTextColor(),
                 )
                 if (rule.pattern.isNotBlank()) {
                     Text(
@@ -683,7 +697,7 @@ private fun BlockRuleItem(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
-                        color = pageSecondaryTextColor()
+                        color = pageSecondaryTextColor(),
                     )
                 }
                 if (!rule.scope.isNullOrBlank()) {
@@ -695,7 +709,7 @@ private fun BlockRuleItem(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
-                        color = pageSecondaryTextColor()
+                        color = pageSecondaryTextColor(),
                     )
                 }
                 if (!rule.rssScope.isNullOrBlank()) {
@@ -707,7 +721,7 @@ private fun BlockRuleItem(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
-                        color = pageSecondaryTextColor()
+                        color = pageSecondaryTextColor(),
                     )
                 }
             }
@@ -716,7 +730,7 @@ private fun BlockRuleItem(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(
                     checked = rule.enabled,
-                    onCheckedChange = { onToggleEnabled() }
+                    onCheckedChange = { onToggleEnabled() },
                 )
                 IconButton(onClick = onEdit, modifier = Modifier.width(32.dp)) {
                     Icon(Icons.Filled.Edit, contentDescription = "编辑", modifier = Modifier.width(18.dp))
@@ -726,7 +740,7 @@ private fun BlockRuleItem(
                 }
             }
         },
-        modifier = Modifier.clickable { onEdit() }
+        modifier = Modifier.clickable { onEdit() },
     )
 }
 
@@ -737,7 +751,7 @@ private fun BlockRuleEditContent(
     sourceRule: BlockRule,
     groups: List<String>,
     onSave: (BlockRule) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(sourceRule.name) }
     var pattern by remember { mutableStateOf(sourceRule.pattern) }
@@ -771,10 +785,11 @@ private fun BlockRuleEditContent(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                if (sourceRule.id.isBlank() || sourceRule.name.isBlank() && sourceRule.pattern.isBlank())
+                if (sourceRule.id.isBlank() || sourceRule.name.isBlank() && sourceRule.pattern.isBlank()) {
                     stringResource(R.string.explore_block_rule_add)
-                else
+                } else {
                     stringResource(R.string.explore_block_rule_edit)
+                },
             )
         },
         text = {
@@ -782,7 +797,7 @@ private fun BlockRuleEditContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // Rule name
                 OutlinedTextField(
@@ -791,13 +806,13 @@ private fun BlockRuleEditContent(
                     label = { Text(stringResource(R.string.explore_block_rule_name)) },
                     placeholder = { Text(stringResource(R.string.explore_block_rule_name_hint)) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 // Pattern + regex toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OutlinedTextField(
                         value = pattern,
@@ -805,13 +820,15 @@ private fun BlockRuleEditContent(
                             pattern = it
                             patternError = if (it.isNotBlank() && isRegex) {
                                 runCatching { Regex(it) }.exceptionOrNull()?.localizedMessage
-                            } else null
+                            } else {
+                                null
+                            }
                         },
                         label = { Text(stringResource(R.string.explore_block_rule_pattern)) },
                         placeholder = { Text(stringResource(R.string.explore_block_rule_pattern_hint)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
-                        isError = patternError != null
+                        isError = patternError != null,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -819,12 +836,17 @@ private fun BlockRuleEditContent(
                             isRegex = it
                             patternError = if (pattern.isNotBlank() && it) {
                                 runCatching { Regex(pattern) }.exceptionOrNull()?.localizedMessage
-                            } else null
+                            } else {
+                                null
+                            }
                         })
                         Text(
-                            text = if (isRegex) stringResource(R.string.explore_block_rule_regex_mode)
-                            else stringResource(R.string.explore_block_rule_keyword_mode),
-                            style = MaterialTheme.typography.labelSmall
+                            text = if (isRegex) {
+                                stringResource(R.string.explore_block_rule_regex_mode)
+                            } else {
+                                stringResource(R.string.explore_block_rule_keyword_mode)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 }
@@ -836,7 +858,7 @@ private fun BlockRuleEditContent(
                 var groupExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = groupExpanded,
-                    onExpandedChange = { groupExpanded = it }
+                    onExpandedChange = { groupExpanded = it },
                 ) {
                     OutlinedTextField(
                         value = selectedGroup,
@@ -844,11 +866,11 @@ private fun BlockRuleEditContent(
                         readOnly = true,
                         label = { Text(stringResource(R.string.explore_block_rule_group_default)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupExpanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
                     )
                     ExposedDropdownMenu(
                         expanded = groupExpanded,
-                        onDismissRequest = { groupExpanded = false }
+                        onDismissRequest = { groupExpanded = false },
                     ) {
                         groups.forEach { group ->
                             DropdownMenuItem(
@@ -856,7 +878,7 @@ private fun BlockRuleEditContent(
                                 onClick = {
                                     selectedGroup = group
                                     groupExpanded = false
-                                }
+                                },
                             )
                         }
                     }
@@ -866,11 +888,11 @@ private fun BlockRuleEditContent(
                 Text(
                     text = stringResource(R.string.explore_block_rule_target_scope),
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     FilterChip(
                         selected = showBookScope,
@@ -884,7 +906,7 @@ private fun BlockRuleEditContent(
                                 bookScopeError = null
                             }
                         },
-                        label = { Text("书源") }
+                        label = { Text("书源") },
                     )
                     FilterChip(
                         selected = showRssScope,
@@ -898,7 +920,7 @@ private fun BlockRuleEditContent(
                                 rssScopeError = null
                             }
                         },
-                        label = { Text("订阅源") }
+                        label = { Text("订阅源") },
                     )
                 }
 
@@ -915,11 +937,11 @@ private fun BlockRuleEditContent(
                         Text(
                             text = stringResource(R.string.explore_block_rule_book_target_scope),
                             style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
                         )
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             val bookScopeOptions = listOf(
                                 BlockRule.SCOPE_TITLE to stringResource(R.string.explore_block_rule_scope_title),
@@ -935,7 +957,7 @@ private fun BlockRuleEditContent(
                                         targetScope = targetScope xor flag
                                         bookScopeError = null
                                     },
-                                    label = { Text(label) }
+                                    label = { Text(label) },
                                 )
                             }
                         }
@@ -945,7 +967,9 @@ private fun BlockRuleEditContent(
 
                         // 作用的指定书源选择器
                         OutlinedTextField(
-                            value = if (scope.isBlank()) "全部书源" else {
+                            value = if (scope.isBlank()) {
+                                "全部书源"
+                            } else {
                                 val count = scope.split(";").map { it.trim() }.filter { it.isNotBlank() }.size
                                 "已选 $count 个书源"
                             },
@@ -960,7 +984,7 @@ private fun BlockRuleEditContent(
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { showScopeSelector = true }
+                                .clickable { showScopeSelector = true },
                         )
                     }
                 }
@@ -973,11 +997,11 @@ private fun BlockRuleEditContent(
                         Text(
                             text = stringResource(R.string.explore_block_rule_rss_target_scope),
                             style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
                         )
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             val rssScopeOptions = listOf(
                                 BlockRule.SCOPE_RSS_TITLE to stringResource(R.string.explore_block_rule_scope_rss_title),
@@ -990,7 +1014,7 @@ private fun BlockRuleEditContent(
                                         rssTargetScope = rssTargetScope xor flag
                                         rssScopeError = null
                                     },
-                                    label = { Text(label) }
+                                    label = { Text(label) },
                                 )
                             }
                         }
@@ -1000,7 +1024,9 @@ private fun BlockRuleEditContent(
 
                         // 作用的指定订阅源选择器
                         OutlinedTextField(
-                            value = if (rssScope.isBlank()) "全部订阅源" else {
+                            value = if (rssScope.isBlank()) {
+                                "全部订阅源"
+                            } else {
                                 val count = rssScope.split(";").map { it.trim() }.filter { it.isNotBlank() }.size
                                 "已选 $count 个订阅源"
                             },
@@ -1015,7 +1041,7 @@ private fun BlockRuleEditContent(
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { showRssScopeSelector = true }
+                                .clickable { showRssScopeSelector = true },
                         )
                     }
                 }
@@ -1023,11 +1049,11 @@ private fun BlockRuleEditContent(
                 // Enabled
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = stringResource(R.string.explore_block_rule_enabled),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                     Switch(checked = enabled, onCheckedChange = { enabled = it })
                 }
@@ -1066,20 +1092,23 @@ private fun BlockRuleEditContent(
                             enabled = enabled,
                             scope = scope.takeIf { it.isNotBlank() },
                             rssScope = rssScope.takeIf { it.isNotBlank() },
-                        )
+                        ),
                     )
-                }
+                },
             ) { Text(stringResource(android.R.string.ok)) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
-        }
+        },
     )
 
     // 作用的书源选择器弹窗
     if (showScopeSelector) {
-        val currentScopeUrls = if (scope.isBlank()) emptySet()
-        else scope.split(";").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        val currentScopeUrls = if (scope.isBlank()) {
+            emptySet()
+        } else {
+            scope.split(";").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        }
         BookSourceSelectorDialog(
             title = stringResource(R.string.explore_block_rule_source_scope),
             initialSelectedUrls = currentScopeUrls,
@@ -1093,14 +1122,17 @@ private fun BlockRuleEditContent(
                 }
                 showScopeSelector = false
             },
-            onDismiss = { showScopeSelector = false }
+            onDismiss = { showScopeSelector = false },
         )
     }
 
     // 作用的订阅源选择器弹窗
     if (showRssScopeSelector) {
-        val currentRssScopeUrls = if (rssScope.isBlank()) emptySet()
-        else rssScope.split(";").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        val currentRssScopeUrls = if (rssScope.isBlank()) {
+            emptySet()
+        } else {
+            rssScope.split(";").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        }
         RssSourceSelectorDialog(
             title = stringResource(R.string.explore_block_rule_rss_source_scope),
             initialSelectedUrls = currentRssScopeUrls,
@@ -1114,7 +1146,7 @@ private fun BlockRuleEditContent(
                 }
                 showRssScopeSelector = false
             },
-            onDismiss = { showRssScopeSelector = false }
+            onDismiss = { showRssScopeSelector = false },
         )
     }
 }
@@ -1126,7 +1158,7 @@ private fun BlockRuleGroupManageContent(
     onAddGroup: (String) -> Unit,
     onRenameGroup: (oldName: String, newName: String) -> Unit,
     onDeleteGroup: (name: String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var localGroups by remember { mutableStateOf(groups) }
     var inputDialog by remember { mutableStateOf<GroupInput?>(null) }
@@ -1143,7 +1175,7 @@ private fun BlockRuleGroupManageContent(
                     value = inputName,
                     onValueChange = { inputName = it },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             },
             confirmButton = {
@@ -1152,12 +1184,12 @@ private fun BlockRuleGroupManageContent(
                     onClick = {
                         dialog.onConfirm(inputName.trim())
                         inputDialog = null
-                    }
+                    },
                 ) { Text(stringResource(android.R.string.ok)) }
             },
             dismissButton = {
                 TextButton(onClick = { inputDialog = null }) { Text(stringResource(android.R.string.cancel)) }
-            }
+            },
         )
     }
 
@@ -1173,7 +1205,7 @@ private fun BlockRuleGroupManageContent(
                 localGroups = localGroups.filterNot { it == groupName }
                 deleteDialog = null
             },
-            onDismissRequest = { deleteDialog = null }
+            onDismissRequest = { deleteDialog = null },
         )
     }
 
@@ -1189,13 +1221,13 @@ private fun BlockRuleGroupManageContent(
                             Icon(
                                 Icons.Filled.Folder,
                                 contentDescription = null,
-                                tint = if (isReserved) pageSecondaryTextColor() else MaterialTheme.colorScheme.primary
+                                tint = if (isReserved) pageSecondaryTextColor() else MaterialTheme.colorScheme.primary,
                             )
                         },
                         headlineContent = {
                             Text(
                                 group,
-                                color = if (isReserved) pageSecondaryTextColor() else MaterialTheme.colorScheme.onSurface
+                                color = if (isReserved) pageSecondaryTextColor() else MaterialTheme.colorScheme.onSurface,
                             )
                         },
                         trailingContent = {
@@ -1214,7 +1246,7 @@ private fun BlockRuleGroupManageContent(
                                     }
                                 }
                             }
-                        }
+                        },
                     )
                     HorizontalDivider()
                 }
@@ -1234,7 +1266,7 @@ private fun BlockRuleGroupManageContent(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
-        }
+        },
     )
 }
 
@@ -1257,7 +1289,7 @@ private fun BookSourceSelectorDialog(
     initialSelectedUrls: Set<String>,
     defaultSelectAll: Boolean = false,
     onConfirm: (Set<String>) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var allSources by remember { mutableStateOf<List<BookSourcePart>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -1280,10 +1312,13 @@ private fun BookSourceSelectorDialog(
     }
 
     val filteredSources = remember(allSources, searchQuery) {
-        if (searchQuery.isBlank()) allSources
-        else allSources.filter {
-            it.bookSourceName.contains(searchQuery, ignoreCase = true) ||
-                it.bookSourceUrl.contains(searchQuery, ignoreCase = true)
+        if (searchQuery.isBlank()) {
+            allSources
+        } else {
+            allSources.filter {
+                it.bookSourceName.contains(searchQuery, ignoreCase = true) ||
+                    it.bookSourceUrl.contains(searchQuery, ignoreCase = true)
+            }
         }
     }
 
@@ -1296,14 +1331,14 @@ private fun BookSourceSelectorDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
                 }
             } else if (allSources.isEmpty()) {
                 Text(
                     text = "暂无书源",
-                    color = pageSecondaryTextColor()
+                    color = pageSecondaryTextColor(),
                 )
             } else {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -1313,7 +1348,7 @@ private fun BookSourceSelectorDialog(
                         onValueChange = { searchQuery = it },
                         placeholder = { Text("搜索书源名称或URL") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1321,7 +1356,7 @@ private fun BookSourceSelectorDialog(
                     // 全选 / 反选按钮 + 已选计数
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         TextButton(onClick = {
                             selectedUrls = filteredSources.map { it.bookSourceUrl }.toSet()
@@ -1342,7 +1377,7 @@ private fun BookSourceSelectorDialog(
                         Text(
                             text = "${selectedUrls.size}/${allSources.size}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = pageSecondaryTextColor()
+                            color = pageSecondaryTextColor(),
                         )
                     }
 
@@ -1353,13 +1388,13 @@ private fun BookSourceSelectorDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp)
+                            .heightIn(max = 400.dp),
                     ) {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .align(Alignment.CenterStart)
+                                .align(Alignment.CenterStart),
                         ) {
                             items(filteredSources, key = { it.bookSourceUrl }) { source ->
                                 Row(
@@ -1373,7 +1408,7 @@ private fun BookSourceSelectorDialog(
                                             }
                                         }
                                         .padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Checkbox(
                                         checked = source.bookSourceUrl in selectedUrls,
@@ -1383,14 +1418,14 @@ private fun BookSourceSelectorDialog(
                                             } else {
                                                 selectedUrls - source.bookSourceUrl
                                             }
-                                        }
+                                        },
                                     )
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = source.bookSourceName.ifBlank { source.bookSourceUrl },
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
-                                            style = MaterialTheme.typography.bodyMedium
+                                            style = MaterialTheme.typography.bodyMedium,
                                         )
                                         if (source.bookSourceName.isNotBlank()) {
                                             Text(
@@ -1398,7 +1433,7 @@ private fun BookSourceSelectorDialog(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = pageSecondaryTextColor()
+                                                color = pageSecondaryTextColor(),
                                             )
                                         }
                                     }
@@ -1407,7 +1442,7 @@ private fun BookSourceSelectorDialog(
                         }
                         VerticalScrollbar(
                             state = listState,
-                            modifier = Modifier.align(Alignment.CenterEnd)
+                            modifier = Modifier.align(Alignment.CenterEnd),
                         )
                     }
                 }
@@ -1422,7 +1457,7 @@ private fun BookSourceSelectorDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(android.R.string.cancel))
             }
-        }
+        },
     )
 }
 
@@ -1445,7 +1480,7 @@ private fun RssSourceSelectorDialog(
     initialSelectedUrls: Set<String>,
     defaultSelectAll: Boolean = false,
     onConfirm: (Set<String>) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var allSources by remember { mutableStateOf<List<RssSourceLite>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -1468,10 +1503,13 @@ private fun RssSourceSelectorDialog(
     }
 
     val filteredSources = remember(allSources, searchQuery) {
-        if (searchQuery.isBlank()) allSources
-        else allSources.filter {
-            it.sourceName.contains(searchQuery, ignoreCase = true) ||
-                it.sourceUrl.contains(searchQuery, ignoreCase = true)
+        if (searchQuery.isBlank()) {
+            allSources
+        } else {
+            allSources.filter {
+                it.sourceName.contains(searchQuery, ignoreCase = true) ||
+                    it.sourceUrl.contains(searchQuery, ignoreCase = true)
+            }
         }
     }
 
@@ -1484,14 +1522,14 @@ private fun RssSourceSelectorDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
                 }
             } else if (allSources.isEmpty()) {
                 Text(
                     text = "暂无订阅源",
-                    color = pageSecondaryTextColor()
+                    color = pageSecondaryTextColor(),
                 )
             } else {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -1501,7 +1539,7 @@ private fun RssSourceSelectorDialog(
                         onValueChange = { searchQuery = it },
                         placeholder = { Text("搜索订阅源名称或URL") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1509,7 +1547,7 @@ private fun RssSourceSelectorDialog(
                     // 全选 / 反选按钮 + 已选计数
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         TextButton(onClick = {
                             selectedUrls = filteredSources.map { it.sourceUrl }.toSet()
@@ -1530,7 +1568,7 @@ private fun RssSourceSelectorDialog(
                         Text(
                             text = "${selectedUrls.size}/${allSources.size}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = pageSecondaryTextColor()
+                            color = pageSecondaryTextColor(),
                         )
                     }
 
@@ -1541,13 +1579,13 @@ private fun RssSourceSelectorDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp)
+                            .heightIn(max = 400.dp),
                     ) {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .align(Alignment.CenterStart)
+                                .align(Alignment.CenterStart),
                         ) {
                             items(filteredSources, key = { it.sourceUrl }) { source ->
                                 Row(
@@ -1561,7 +1599,7 @@ private fun RssSourceSelectorDialog(
                                             }
                                         }
                                         .padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Checkbox(
                                         checked = source.sourceUrl in selectedUrls,
@@ -1571,14 +1609,14 @@ private fun RssSourceSelectorDialog(
                                             } else {
                                                 selectedUrls - source.sourceUrl
                                             }
-                                        }
+                                        },
                                     )
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = source.sourceName.ifBlank { source.sourceUrl },
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
-                                            style = MaterialTheme.typography.bodyMedium
+                                            style = MaterialTheme.typography.bodyMedium,
                                         )
                                         if (source.sourceName.isNotBlank()) {
                                             Text(
@@ -1586,7 +1624,7 @@ private fun RssSourceSelectorDialog(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = pageSecondaryTextColor()
+                                                color = pageSecondaryTextColor(),
                                             )
                                         }
                                     }
@@ -1595,7 +1633,7 @@ private fun RssSourceSelectorDialog(
                         }
                         VerticalScrollbar(
                             state = listState,
-                            modifier = Modifier.align(Alignment.CenterEnd)
+                            modifier = Modifier.align(Alignment.CenterEnd),
                         )
                     }
                 }
@@ -1610,14 +1648,14 @@ private fun RssSourceSelectorDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(android.R.string.cancel))
             }
-        }
+        },
     )
 }
 
 private data class GroupInput(
     val title: String,
     val initialName: String = "",
-    val onConfirm: (String) -> Unit
+    val onConfirm: (String) -> Unit,
 )
 
 private fun importFromClipboard(context: android.content.Context, onRefresh: () -> Unit) {
@@ -1634,11 +1672,10 @@ private fun importFromClipboard(context: android.content.Context, onRefresh: () 
     val existing = BlockRuleStore.load(context)
     val existingIds = existing.map { it.id }.toSet()
     val usedIds = mutableSetOf<String>()
-    
+
     // 检查规则是否与现有规则内容相同（忽略 id）
-    fun isDuplicate(rule: BlockRule): Boolean {
-        return existing.any { existingRule ->
-            existingRule.name == rule.name &&
+    fun isDuplicate(rule: BlockRule): Boolean = existing.any { existingRule ->
+        existingRule.name == rule.name &&
             existingRule.pattern == rule.pattern &&
             existingRule.group == rule.group &&
             existingRule.isRegex == rule.isRegex &&
@@ -1646,17 +1683,16 @@ private fun importFromClipboard(context: android.content.Context, onRefresh: () 
             existingRule.rssTargetScope == rule.rssTargetScope &&
             existingRule.scope == rule.scope &&
             existingRule.rssScope == rule.rssScope
-        }
     }
-    
+
     val newRules = imported.mapNotNull { rule ->
         var normalized = BlockRuleStore.sanitizeRule(rule)
-        
+
         // 检查规则内容是否与现有规则重复，如果重复则跳过
         if (isDuplicate(normalized)) {
             return@mapNotNull null
         }
-        
+
         // 检查与现有规则的 id 冲突，以及导入列表内部的 id 冲突
         while (normalized.id in existingIds || normalized.id in usedIds) {
             normalized = normalized.copyWithNewId()
@@ -1664,12 +1700,12 @@ private fun importFromClipboard(context: android.content.Context, onRefresh: () 
         usedIds.add(normalized.id)
         normalized
     }
-    
+
     if (newRules.isEmpty()) {
         context.toastOnUi("导入的规则已存在，无新规则")
         return
     }
-    
+
     BlockRuleStore.save(context, existing + newRules)
     context.toastOnUi("成功导入 ${newRules.size} 条规则")
     onRefresh()

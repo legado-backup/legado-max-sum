@@ -1,11 +1,12 @@
 package io.legado.app.model.analyzeRule
 
 import io.legado.app.utils.GSON
+import java.util.concurrent.ConcurrentHashMap
 
 class RuleData : RuleDataInterface {
 
     override val variableMap by lazy {
-        hashMapOf<String, String>()
+        ConcurrentHashMap<String, String>()
     }
 
     override fun putBigVariable(key: String, value: String?) {
@@ -16,9 +17,7 @@ class RuleData : RuleDataInterface {
         }
     }
 
-    override fun getBigVariable(key: String): String? {
-        return null
-    }
+    override fun getBigVariable(key: String): String? = null
 
     fun getVariable(): String? {
         if (variableMap.isEmpty()) {
@@ -26,5 +25,4 @@ class RuleData : RuleDataInterface {
         }
         return GSON.toJson(variableMap)
     }
-
 }

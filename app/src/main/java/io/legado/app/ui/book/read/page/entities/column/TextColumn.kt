@@ -4,11 +4,11 @@ import android.graphics.Canvas
 import android.os.Build
 import androidx.annotation.Keep
 import io.legado.app.help.config.ReadBookConfig
-import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.ui.book.read.page.ContentTextView
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextLine.Companion.emptyTextLine
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
+import io.legado.app.ui.book.read.page.provider.HighlightFontCache
 
 /**
  * 文字列
@@ -28,6 +28,7 @@ data class TextColumn(
     override val bgImage: String = "",
     override val bgImageFit: Int = 0,
     override val bgImageScale: Float = 1f,
+    override val fontPath: String = "",
 ) : TextBaseColumn {
 
     override var textLine: TextLine = emptyTextLine
@@ -74,6 +75,14 @@ data class TextColumn(
             textPaint.color = drawColor
         }
         val y = textLine.lineBase - textLine.lineTop
+        // 高亮规则指定字体时临时替换画笔字体，绘制完立即还原，避免影响同行其他列；
+        // 无条件保存/还原，避免依赖画笔原字体非空的隐含假设
+        val oldTypeface = if (fontPath.isNotEmpty()) textPaint.typeface else null
+        if (fontPath.isNotEmpty()) {
+            HighlightFontCache.getTypefaceFor(fontPath, textPaint.typeface)?.let {
+                textPaint.typeface = it
+            }
+        }
         if (underlineMode == 7) {
             val oldSkewX = textPaint.textSkewX
             textPaint.textSkewX = -0.25f
@@ -81,6 +90,9 @@ data class TextColumn(
             textPaint.textSkewX = oldSkewX
         } else {
             drawTextInternal(canvas, textPaint, y)
+        }
+        if (oldTypeface != null) {
+            textPaint.typeface = oldTypeface
         }
         if (selected && !isSearchResult) {
             canvas.drawRect(start, 0f, end, textLine.height, view.selectedPaint)
@@ -96,5 +108,4 @@ data class TextColumn(
             canvas.drawText(charData, start, y, textPaint)
         }
     }
-
 }

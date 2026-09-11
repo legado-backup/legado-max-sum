@@ -202,6 +202,7 @@
     <string name="book_file_selector">添加书籍</string>
     <string name="scan_book_source">扫描</string>
     <string name="copy_source">拷贝源</string>
+    <string name="paste">粘贴</string>
     <string name="paste_source">粘贴源</string>
     <string name="source_rule_s">源规则说明</string>
     <string name="check_update">检查更新</string>
@@ -404,7 +405,8 @@
     <string name="no_book_cache">没有已缓存的书籍</string>
     <string name="status_bar_immersion">状态栏颜色透明</string>
     <string name="imm_navigation_bar">沉浸式导航栏</string>
-    <string name="imm_navigation_bar_s">顶栏颜色透明</string>
+    <string name="imm_navigation_bar_s">导航栏颜色透明</string>
+    <string name="top_bar_transparent">顶栏颜色透明</string>
     <string name="top_bar_transparent_hint">关闭后会显示顶栏阴影，打开则消失</string>
     <string name="add_to_bookshelf">放入书架</string>
     <string name="add_to_favorites">加入收藏</string>
@@ -676,6 +678,8 @@
     <string name="add_replace_rule">新建替换</string>
     <string name="group">分组</string>
     <string name="group_s">分组：%s</string>
+    <string name="book_tag_s">标签：%s</string>
+    <string name="book_tag_existing">已有标签</string>
     <string name="toc_s">目录：%s</string>
     <string name="enable_explore">启用发现</string>
     <string name="disable_explore">禁用发现</string>
@@ -786,6 +790,8 @@
     <string name="add_to_text_context_menu_s">长按文字在操作菜单中显示阅读·搜索</string>
     <string name="add_to_text_context_menu_t">文字操作显示搜索</string>
     <string name="record_log">记录日志</string>
+    <string name="debug_log">调试日志</string>
+    <string name="export_log">导出日志</string>
     <string name="log">日志</string>
     <string name="chinese_converter">中文简繁体转换</string>
     <string name="change_icon_error">图标为矢量图标，Android 8.0 以前不支持</string>
@@ -887,6 +893,7 @@
     <string name="save_image">保存图片</string>
     <string name="no_default_path">没有默认路径</string>
     <string name="change_group">设置分组</string>
+    <string name="set_book_tag">设置标签</string>
     <string name="view_toc">查看目录</string>
     <string name="bar_elevation">导航栏阴影</string>
     <string name="bar_elevation_s">当前阴影大小（elevation）：%s</string>
@@ -1070,6 +1077,19 @@
     <string name="export_to_web_dav">导出到 WebDav</string>
     <string name="reverse_content">反转内容</string>
     <string name="debug">调试</string>
+    <string name="source_used_api">源所用API</string>
+    <string name="api_category_variable">内置变量</string>
+    <string name="api_category_function">内置函数</string>
+    <string name="api_category_source_method">源对象方法</string>
+    <string name="api_used">已使用</string>
+    <string name="api_not_used">未使用</string>
+    <string name="api_no_usage">该API未在本源中使用</string>
+    <string name="api_empty_list">暂无条目</string>
+    <string name="api_copied">已复制「%1$s」</string>
+    <string name="api_copy_mode_enabled">已开启复制模式</string>
+    <string name="api_copy_mode_disabled">已关闭复制模式</string>
+    <string name="api_usage_locations">「%1$s」的使用位置</string>
+    <string name="api_source_not_found">未找到该书源</string>
     <string name="crash_log">崩溃日志</string>
     <string name="use_zh_layout">使用自定义中文分行</string>
     <string name="image_style">图片样式</string>
@@ -1525,6 +1545,7 @@
     <string name="more_settings">更多设置</string>
     <string name="show_read_record_in_book_info">显示阅读记录</string>
     <string name="show_author_other_works_in_book_info">显示作者其他作品</string>
+    <string name="show_book_tag_in_book_info">显示设置标签</string>
     <string name="words">字数</string>
     <string name="app_name_sigma">阅读Max</string>
     <string name="about_description_sigma">\u3000\u3000阅读Max继承自阅读Sigma，旨在改进和增加原版功能，欢迎您的加入。</string>
@@ -1771,6 +1792,7 @@
     <!-- Smart Import -->
     <string name="smart_import">智能导入</string>
     <!-- URL Record -->
+    <string name="url_record_count">共 %1$d 条记录</string>
     <string name="url_record">URL访问记录</string>
     <string name="record_url_switch">启用URL记录</string>
     <string name="record_url_enabled">URL记录已启用</string>
@@ -1919,6 +1941,7 @@
     <string name="import_from_clipboard">从剪贴板导入</string>
     <string name="import_from_file">从文件导入</string>
     <string name="export_to_file">导出到文件</string>
+    <string name="import_zip">导入zip</string>
     <string name="cover_gallery">封面图集</string>
     <string name="cover_gallery_summary">管理分组封面图集，可设置为全局默认封面源</string>
 
@@ -1965,6 +1988,7 @@
     <!-- 列表视图显示更多信息 -->
     <string name="show_more_info">显示更多信息</string>
     <string name="show_intro">显示简介</string>
+    <string name="show_bookshelf_read_progress">显示阅读进度</string>
     <string name="show_category_info">显示分类信息等</string>
     <string name="show_book_border">显示外边框</string>
     <!-- 简介行数选择 -->
@@ -2213,6 +2237,7 @@
     <string name="application_theme_import_with_options">导入应用主题设置</string>
     <string name="application_theme_import_options_hint">勾选需要在导入时创建的组件，未勾选的组件将被跳过（不创建）</string>
     <string name="application_theme_delete_options_hint">删除「%1$s」时，勾选要一并删除的关联组件，未勾选的组件将被保留</string>
+    <string name="application_theme_builtin_name">默认主题</string>
     <string name="application_theme_manage">应用主题</string>
     <string name="application_theme_name">应用主题名称</string>
     <string name="application_theme_name_exists">应用主题名称已存在</string>

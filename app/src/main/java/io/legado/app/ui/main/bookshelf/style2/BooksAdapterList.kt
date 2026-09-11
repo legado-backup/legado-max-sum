@@ -5,8 +5,10 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.flexbox.FlexboxLayout
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.ItemBookshelfGridGroupBinding
@@ -14,7 +16,9 @@ import io.legado.app.databinding.ItemBookshelfList2Binding
 import io.legado.app.databinding.ItemBookshelfListBinding
 import io.legado.app.databinding.ItemBookshelfListGroupBinding
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.readProgress
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.bookBorderBackground
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
@@ -25,31 +29,46 @@ import io.legado.app.utils.dpToPx
 import splitties.views.onLongClick
 
 @Suppress("UNUSED_PARAMETER")
-class BooksAdapterList(context: Context, callBack: CallBack) :
-    BaseBooksAdapter<RecyclerView.ViewHolder>(context, callBack) {
+class BooksAdapterList(context: Context, callBack: CallBack) : BaseBooksAdapter<RecyclerView.ViewHolder>(context, callBack) {
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        return when (viewType) {
-            1 -> {
-                // 根据folderLayout选择文件夹布局
-                if (AppConfig.folderLayout >= 2) {
-                    GroupGridViewHolder(ItemBookshelfGridGroupBinding.inflate(inflater, parent, false))
-                } else {
-                    GroupViewHolder(ItemBookshelfListGroupBinding.inflate(inflater, parent, false))
-                }
-            }
-            else -> {
-                if (AppConfig.bookLayout == 0) { BookViewHolder(ItemBookshelfListBinding.inflate(inflater, parent, false)) }
-                else { BookViewHolder2(ItemBookshelfList2Binding.inflate(inflater, parent, false)) }
-            }
+    private fun updateReadProgress(pb: LinearProgressIndicator, tvReadPercent: TextView, item: Book) {
+        val progress = if (AppConfig.showBookshelfReadProgress) item.readProgress() else null
+        if (progress == null) {
+            pb.gone()
+            tvReadPercent.gone()
+        } else {
+            // 未读轨道跟随主题强调色（半透明），避免默认轨道色与主题色脱节
+            pb.setIndicatorColor(pb.context.accentColor)
+            pb.setTrackColor(ColorUtils.setAlphaComponent(pb.context.accentColor, 64))
+            pb.visible()
+            pb.progress = (progress * 100).toInt()
+            tvReadPercent.visible()
+            tvReadPercent.text = "${(progress * 100).toInt()}%"
+        }
+    }
 
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder = when (viewType) {
+        1 -> {
+            // 根据folderLayout选择文件夹布局
+            if (AppConfig.folderLayout >= 2) {
+                GroupGridViewHolder(ItemBookshelfGridGroupBinding.inflate(inflater, parent, false))
+            } else {
+                GroupViewHolder(ItemBookshelfListGroupBinding.inflate(inflater, parent, false))
+            }
+        }
+        else -> {
+            if (AppConfig.bookLayout == 0) {
+                BookViewHolder(ItemBookshelfListBinding.inflate(inflater, parent, false))
+            } else {
+                BookViewHolder2(ItemBookshelfList2Binding.inflate(inflater, parent, false))
+            }
         }
     }
 
     override fun onBindViewHolder(
         holder: RecyclerView.ViewHolder,
         position: Int,
-        payloads: MutableList<Any>
+        payloads: MutableList<Any>,
     ) {
         when (holder) {
             is BookViewHolder -> (getItem(position) as? Book)?.let {
@@ -74,8 +93,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
         }
     }
 
-    inner class BookViewHolder(val binding: ItemBookshelfListBinding) :
-        RecyclerView.ViewHolder(binding.root) {
+    inner class BookViewHolder(val binding: ItemBookshelfListBinding) : RecyclerView.ViewHolder(binding.root) {
 
         fun onBind(item: Book, position: Int) = binding.run {
             // 根据配置控制书籍外边框显示和间距
@@ -83,7 +101,10 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 root.background = context.bookBorderBackground
                 root.setPadding(8.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
                 (root.layoutParams as? ViewGroup.MarginLayoutParams)?.setMargins(
-                    4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx()
+                    4.dpToPx(),
+                    4.dpToPx(),
+                    4.dpToPx(),
+                    4.dpToPx(),
                 )
             } else {
                 root.background = null
@@ -101,6 +122,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
             ivRead.visible()
             upRefresh(this, item)
             upLastUpdateTime(binding, item)
+            updateReadProgress(binding.pbReadProgress, binding.tvReadPercent, item)
             // 显示简介和标签（仅在列表视图启用"显示更多信息"时）
             upMoreInfo(binding, item)
         }
@@ -119,10 +141,13 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                             "last" -> tvLast.text = item.latestChapterTitle
                             "cover" -> ivCover.load(
                                 item,
-                                false
+                                false,
                             )
 
-                            "refresh" -> upRefresh(this, item)
+                            "refresh" -> {
+                                upRefresh(this, item)
+                                updateReadProgress(binding.pbReadProgress, binding.tvReadPercent, item)
+                            }
                             "lastUpdateTime" -> upLastUpdateTime(binding, item)
                             "moreInfo" -> upMoreInfo(binding, item)
                         }
@@ -185,8 +210,8 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 flexboxLayout.addView(wordCountTag)
             }
 
-            // 后显示分类标签
-            val tagsText = item.customTag ?: item.kind ?: ""
+            // 后显示分类标签（只显示书源分类信息，书籍标签仅用于书架标签栏，不在此处展示）
+            val tagsText = item.kind ?: ""
             if (tagsText.isNotBlank()) {
                 val tags = tagsText.splitNotBlank(",", "\n")
                 for (tag in tags) {
@@ -197,26 +222,24 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
         }
 
         /** 创建单个标签视图（带外框样式） */
-        private fun createTagView(tag: String): TextView {
-            return TextView(context).apply {
-                text = tag
-                textSize = 11f
-                gravity = Gravity.CENTER
-                setTextColor(context.resources.getColor(io.legado.app.R.color.tv_text_summary, null))
-                // 根据书籍外边框状态同步标签外框：有边框时使用带描边的标签背景，无边框时仅显示纯文本
-                if (AppConfig.showBookBorder) {
-                    setBackgroundResource(io.legado.app.R.drawable.bg_tag)
-                }
-                // 设置内边距
-                setPadding(8, 4, 8, 4)
-                // 设置 FlexboxLayout.LayoutParams
-                layoutParams = FlexboxLayout.LayoutParams(
-                    FlexboxLayout.LayoutParams.WRAP_CONTENT,
-                    FlexboxLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    // 标签之间的间距
-                    setMargins(4, 2, 4, 2)
-                }
+        private fun createTagView(tag: String): TextView = TextView(context).apply {
+            text = tag
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(context.resources.getColor(io.legado.app.R.color.tv_text_summary, null))
+            // 根据书籍外边框状态同步标签外框：有边框时使用带描边的标签背景，无边框时仅显示纯文本
+            if (AppConfig.showBookBorder) {
+                setBackgroundResource(io.legado.app.R.drawable.bg_tag)
+            }
+            // 设置内边距
+            setPadding(8, 4, 8, 4)
+            // 设置 FlexboxLayout.LayoutParams
+            layoutParams = FlexboxLayout.LayoutParams(
+                FlexboxLayout.LayoutParams.WRAP_CONTENT,
+                FlexboxLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                // 标签之间的间距
+                setMargins(4, 2, 4, 2)
             }
         }
 
@@ -230,14 +253,12 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 binding.tvLastUpdateTime.text = ""
             }
         }
-
     }
 
     /**
-    紧凑列表布局
+     紧凑列表布局
      */
-    inner class BookViewHolder2(val binding: ItemBookshelfList2Binding) :
-        RecyclerView.ViewHolder(binding.root) {
+    inner class BookViewHolder2(val binding: ItemBookshelfList2Binding) : RecyclerView.ViewHolder(binding.root) {
 
         fun onBind(item: Book, position: Int) = binding.run {
             // 根据配置控制书籍外边框显示和间距
@@ -245,7 +266,10 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 root.background = context.bookBorderBackground
                 root.setPadding(8.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
                 (root.layoutParams as? ViewGroup.MarginLayoutParams)?.setMargins(
-                    4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx()
+                    4.dpToPx(),
+                    4.dpToPx(),
+                    4.dpToPx(),
+                    4.dpToPx(),
                 )
             } else {
                 root.background = null
@@ -262,6 +286,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
             ivLast.visible()
             upRefresh(this, item)
             upLastUpdateTime(binding, item)
+            updateReadProgress(binding.pbReadProgress, binding.tvReadPercent, item)
         }
 
         fun onBind(item: Book, position: Int, payloads: MutableList<Any>) = binding.run {
@@ -278,10 +303,13 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                             "last" -> tvLast.text = item.latestChapterTitle
                             "cover" -> ivCover.load(
                                 item,
-                                false
+                                false,
                             )
 
-                            "refresh" -> upRefresh(this, item)
+                            "refresh" -> {
+                                upRefresh(this, item)
+                                updateReadProgress(binding.pbReadProgress, binding.tvReadPercent, item)
+                            }
                             "lastUpdateTime" -> upLastUpdateTime(binding, item)
                         }
                     }
@@ -323,11 +351,9 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 binding.tvLastUpdateTime.text = ""
             }
         }
-
     }
 
-    inner class GroupViewHolder(val binding: ItemBookshelfListGroupBinding) :
-        RecyclerView.ViewHolder(binding.root) {
+    inner class GroupViewHolder(val binding: ItemBookshelfListGroupBinding) : RecyclerView.ViewHolder(binding.root) {
 
         fun onBind(item: BookGroup, position: Int) = binding.run {
             tvName.text = item.groupName
@@ -365,11 +391,9 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 callBack.onItemLongClick(item)
             }
         }
-
     }
 
-    inner class GroupGridViewHolder(val binding: ItemBookshelfGridGroupBinding) :
-        RecyclerView.ViewHolder(binding.root) {
+    inner class GroupGridViewHolder(val binding: ItemBookshelfGridGroupBinding) : RecyclerView.ViewHolder(binding.root) {
 
         fun onBind(item: BookGroup, position: Int) = binding.run {
             tvName.text = item.groupName
@@ -400,7 +424,5 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 callBack.onItemLongClick(item)
             }
         }
-
     }
-
 }

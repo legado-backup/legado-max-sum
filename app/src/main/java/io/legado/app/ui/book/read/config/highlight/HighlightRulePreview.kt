@@ -3,6 +3,7 @@ package io.legado.app.ui.book.read.config.highlight
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
+import io.legado.app.ui.book.read.page.provider.HighlightTypefaceSpan
 
 /**
  * 高亮规则配置页的预览文本构建器。
@@ -20,6 +21,14 @@ object HighlightRulePreview {
         regex.findAll(text).forEach { match ->
             val start = match.range.first
             val end = match.range.last + 1
+            if (style.font.isNotBlank()) {
+                spannable.setSpan(
+                    HighlightTypefaceSpan(style.font),
+                    start,
+                    end,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+            }
             val textColor = style.resolvedTextColor
             val accentColor = style.resolvedAccentColor
             val underlineWidth = style.underlineWidth
@@ -38,11 +47,11 @@ object HighlightRulePreview {
                         accentColor,
                         underlineWidth,
                         style.underlineSvgPath,
-                        underlineOffset
+                        underlineOffset,
                     ),
                     start,
                     end,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                 )
             } else if (bgColor != null) {
                 spannable.setSpan(
@@ -53,11 +62,11 @@ object HighlightRulePreview {
                         accentColor,
                         underlineWidth,
                         style.underlineSvgPath,
-                        underlineOffset
+                        underlineOffset,
                     ),
                     start,
                     end,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                 )
             } else {
                 when (style.underlineMode) {
@@ -66,7 +75,7 @@ object HighlightRulePreview {
                             SolidUnderlineSpan(textColor, accentColor, underlineWidth, underlineOffset),
                             start,
                             end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                         )
                     }
                     2 -> {
@@ -74,7 +83,7 @@ object HighlightRulePreview {
                             DashUnderlineSpan(textColor, accentColor, underlineWidth, underlineOffset),
                             start,
                             end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                         )
                     }
                     3 -> {
@@ -82,7 +91,7 @@ object HighlightRulePreview {
                             WaveUnderlineSpan(textColor, accentColor, underlineWidth, underlineOffset),
                             start,
                             end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                         )
                     }
                     4 -> {
@@ -90,7 +99,7 @@ object HighlightRulePreview {
                             DoubleUnderlineSpan(textColor, accentColor, underlineWidth, underlineOffset),
                             start,
                             end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                         )
                     }
                     5 -> {
@@ -100,14 +109,14 @@ object HighlightRulePreview {
                                 SvgUnderlineSpan(textColor, accentColor, underlineWidth, svgPath),
                                 start,
                                 end,
-                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                             )
                         } else {
                             spannable.setSpan(
                                 ForegroundColorSpan(textColor),
                                 start,
                                 end,
-                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                             )
                         }
                     }
@@ -116,7 +125,7 @@ object HighlightRulePreview {
                             StrikeThroughSpan(textColor, accentColor, underlineWidth),
                             start,
                             end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                         )
                     }
                     7 -> {
@@ -124,7 +133,7 @@ object HighlightRulePreview {
                             ItalicTextSpan(textColor),
                             start,
                             end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                         )
                     }
                     8 -> {
@@ -132,7 +141,7 @@ object HighlightRulePreview {
                             BoxTextSpan(textColor, accentColor, underlineWidth),
                             start,
                             end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                         )
                     }
                     else -> {
@@ -140,7 +149,7 @@ object HighlightRulePreview {
                             ForegroundColorSpan(textColor),
                             start,
                             end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                         )
                     }
                 }

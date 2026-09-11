@@ -40,10 +40,18 @@ import java.io.File
 /**
  * 字体选择对话框
  */
-class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
+class FontSelectDialog :
+    BaseDialogFragment(R.layout.dialog_font_select),
     Toolbar.OnMenuItemClickListener,
     FontAdapter.CallBack {
+
+    companion object {
+        /** 规则字体选择场景：菜单"系统字体"只清空回调字体，不改全局 AppConfig.systemTypefaces */
+        const val ARG_FOR_RULE = "forRule"
+    }
+
     private val fontRegex = Regex("(?i).*\\.[ot]tf")
+    private val forRule get() = arguments?.getBoolean(ARG_FOR_RULE) == true
     private val binding by viewBinding(DialogFontSelectBinding::bind)
     private val adapter by lazy {
         val curFontPath = callBack?.curFontPath ?: ""
@@ -104,10 +112,16 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
     override fun onMenuItemClick(item: MenuItem?): Boolean {
         when (item?.itemId) {
             R.id.menu_default -> {
+                if (forRule) {
+                    // 规则字体场景下"系统字体"意为恢复默认（清空），不能误改全局设置
+                    onDefaultFontChange()
+                    dismissAllowingStateLoss()
+                    return true
+                }
                 val requireContext = requireContext()
                 alert(titleResource = R.string.system_typeface) {
                     items(
-                        requireContext.resources.getStringArray(R.array.system_typefaces).toList()
+                        requireContext.resources.getStringArray(R.array.system_typefaces).toList(),
                     ) { _, i ->
                         AppConfig.systemTypefaces = i
                         onDefaultFontChange()
@@ -144,7 +158,7 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
             .rationale(R.string.tip_perm_request_storage)
             .onGranted {
                 loadFontFiles(
-                    FileDoc.fromFile(File(path))
+                    FileDoc.fromFile(File(path)),
                 )
             }
             .request()
@@ -166,7 +180,7 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
 
     private fun mergeFontItems(
         items1: ArrayList<FileDoc>,
-        items2: ArrayList<FileDoc>
+        items2: ArrayList<FileDoc>,
     ): List<FileDoc> {
         val items = ArrayList(items1)
         items2.forEach { item2 ->

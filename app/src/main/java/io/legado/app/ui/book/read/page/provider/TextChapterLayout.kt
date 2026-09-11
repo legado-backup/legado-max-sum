@@ -2,6 +2,7 @@ package io.legado.app.ui.book.read.page.provider
 
 import android.graphics.Paint
 import android.text.Layout
+import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.StaticLayout
@@ -46,7 +47,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import java.util.LinkedList
 import kotlin.math.roundToInt
 import android.util.Size
@@ -78,7 +81,6 @@ import io.legado.app.ui.book.read.config.highlight.HighlightRuleStyle
 import io.legado.app.ui.book.read.page.provider.ChapterProvider.reviewChar
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.getPrefBoolean
 import splitties.init.appCtx
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
@@ -110,6 +112,9 @@ class TextChapterLayout(
 
     private val contentPaint = ChapterProvider.contentPaint
     private val reviewCharWidth by lazy { contentPaint.measureText(srcReplaceStr) * 1.5556f }
+
+    // 高亮规则字体测宽专用画笔，参数在每次使用前按当前排版画笔设置
+    private val highlightFontPaint = TextPaint().apply { isAntiAlias = true }
     private val contentPaintTextHeight = ChapterProvider.contentPaintTextHeight
     private val contentPaintFontMetrics = ChapterProvider.contentPaintFontMetrics
 
@@ -139,7 +144,7 @@ class TextChapterLayout(
             kotlin.runCatching {
                 CompiledHighlightRule(
                     rule = rule,
-                    regex = rule.toRegex()
+                    regex = rule.toRegex(),
                 )
             }.getOrNull()
         }
@@ -164,12 +169,11 @@ class TextChapterLayout(
 
     var channel = Channel<TextPage>(Channel.UNLIMITED)
 
-
     init {
         job = Coroutine.async(
             scope,
             start = CoroutineStart.LAZY,
-            executeContext = IO
+            executeContext = IO,
         ) {
             launch {
                 val bookSource = book.getBookSource() ?: return@launch
@@ -194,10 +198,10 @@ class TextChapterLayout(
 
     fun appendContent(newContents: List<String>) {
         if (newContents.isEmpty()) return
-        
+
         kotlinx.coroutines.GlobalScope.launch(IO) {
             try {
-                AppLog.putReaderDebug("懒加载排版: 请求追加内容，共${newContents.size}段，排版完成状态=${isCompleted}")
+                AppLog.putReaderDebug("懒加载排版: 请求追加内容，共${newContents.size}段，排版完成状态=$isCompleted")
                 appendMutex.withLock {
                     if (!isCompleted) {
                         AppLog.putReaderDebug("懒加载排版: 初始排版未完成，内容入队等待")
@@ -212,13 +216,13 @@ class TextChapterLayout(
             }
         }
     }
-    
+
     private suspend fun appendContentInternal(newContents: List<String>) {
         val processedContents = preprocessBubbleJs(newContents)
         val imageStyle = book.getImageStyle()
         val isTextImageStyle = imageStyle.equals(Book.imgStyleText, true)
         val bodyHighlightStyles = buildBodyHighlightStyles(processedContents)
-        
+
         // 续排逻辑：如果最后一页没排满，摘回来继续排
         if (textPages.isNotEmpty()) {
             val lastPage = textPages.last()
@@ -239,7 +243,7 @@ class TextChapterLayout(
                 }
             } else if (lastLine != null && lastLine.isParagraphEnd && lastPage.height < visibleHeight) {
                 // 段落结束了但页面还有空间，也摘回来续排
-                AppLog.putReaderDebug("懒加载排版: 最后一页有剩余空间，摘回续排，当前高度=${lastPage.height}, 可视高度=${visibleHeight}")
+                AppLog.putReaderDebug("懒加载排版: 最后一页有剩余空间，摘回续排，当前高度=${lastPage.height}, 可视高度=$visibleHeight")
                 pendingTextPage = lastPage
                 textPages.removeAt(textPages.lastIndex)
                 durY = lastPage.height
@@ -250,11 +254,11 @@ class TextChapterLayout(
                 }
             }
         }
-        
+
         val sb = StringBuffer()
         var isSetTypedImage = false
         var wordCount = 0
-        
+
         for ((contentIndex, content) in processedContents.withIndex()) {
             currentCoroutineContext().ensureActive()
             if (adaptSpecialStyle) {
@@ -286,7 +290,7 @@ class TextChapterLayout(
                 }
                 matcher.appendTail(sb)
                 text = sb.toString()
-                wordCount += text.replace(noWordCountRegex,"").length
+                wordCount += text.replace(noWordCountRegex, "").length
                 setTypeText(
                     book,
                     text,
@@ -297,7 +301,7 @@ class TextChapterLayout(
                     srcList = srcList,
                     clickList = clickList,
                     bodyHighlightStyles = bodyHighlightStyles.takeIf { !content.contains("<img") },
-                    bodyHighlightStart = bodyHighlightStyles.startAt(contentIndex)
+                    bodyHighlightStart = bodyHighlightStyles.startAt(contentIndex),
                 )
             } else {
                 if (isSetTypedImage) {
@@ -382,7 +386,7 @@ class TextChapterLayout(
                                         "TEXT",
                                         isFirstLine = isFirstLine,
                                         srcList = srcList,
-                                        clickList = clickList
+                                        clickList = clickList,
                                     )
                                     sb.setLength(0)
                                     isFirstLine = false
@@ -394,7 +398,7 @@ class TextChapterLayout(
                                     style,
                                     imgSize,
                                     click,
-                                    isAnimated
+                                    isAnimated,
                                 )
                                 isSetTypedImage = true
                             }
@@ -412,7 +416,7 @@ class TextChapterLayout(
                 }
                 text = sb.toString()
                 if (text.isNotBlank()) {
-                    wordCount += text.replace(noWordCountRegex,"").length
+                    wordCount += text.replace(noWordCountRegex, "").length
                     setTypeText(
                         book,
                         text,
@@ -424,14 +428,14 @@ class TextChapterLayout(
                         srcList = srcList,
                         clickList = clickList,
                         bodyHighlightStyles = bodyHighlightStyles.takeIf { !content.contains("<img") },
-                        bodyHighlightStart = bodyHighlightStyles.startAt(contentIndex)
+                        bodyHighlightStart = bodyHighlightStyles.startAt(contentIndex),
                     )
                 }
             }
             pendingTextPage.lines.lastOrNull()?.isParagraphEnd = true
             stringBuilder.append("\n")
         }
-        
+
         val textPage = pendingTextPage
         val endPadding = 20.dpToPx()
         val durYPadding = durY + endPadding
@@ -443,7 +447,7 @@ class TextChapterLayout(
         textPage.text = stringBuilder.toString()
         currentCoroutineContext().ensureActive()
         onPageCompleted()
-        
+
         pendingTextPage = TextPage()
         stringBuilder.clear()
         durY = 0f
@@ -484,7 +488,7 @@ class TextChapterLayout(
         } finally {
             listener = null
         }
-        
+
         // 初始排版完成后，处理排队等待的懒加载内容
         if (pendingLazyContents.isNotEmpty()) {
             kotlinx.coroutines.GlobalScope.launch(IO) {
@@ -534,7 +538,7 @@ class TextChapterLayout(
 
         if (titleMode != 2 || bookChapter.isVolume || contents.isEmpty()) {
             var firstLine = true
-            //标题非隐藏
+            // 标题非隐藏
             displayTitle.splitNotBlank("\n").forEach { text ->
                 val srcList = LinkedList<String>()
                 val clickList = LinkedList<String?>()
@@ -606,7 +610,7 @@ class TextChapterLayout(
                                 style,
                                 imgSize,
                                 click,
-                                isAnimated
+                                isAnimated,
                             )
                             null
                         }
@@ -623,7 +627,7 @@ class TextChapterLayout(
                     clickList = clickList,
                     isTitle = true,
                     emptyContent = contents.isEmpty(),
-                    isVolumeTitle = bookChapter.isVolume
+                    isVolumeTitle = bookChapter.isVolume,
                 )
                 pendingTextPage.lines.last().isParagraphEnd = true
                 stringBuilder.append("\n")
@@ -659,7 +663,7 @@ class TextChapterLayout(
             }
             var text = content.replace(srcReplaceChar, srcReplacementChar)
             if (isTextImageStyle) {
-                //图片样式为文字嵌入类型
+                // 图片样式为文字嵌入类型
                 val srcList = LinkedList<String>()
                 val clickList = LinkedList<String?>()
                 sb.setLength(0)
@@ -674,7 +678,7 @@ class TextChapterLayout(
                 }
                 matcher.appendTail(sb)
                 text = sb.toString()
-                wordCount += text.replace(noWordCountRegex,"").length
+                wordCount += text.replace(noWordCountRegex, "").length
                 setTypeText(
                     book,
                     text,
@@ -685,7 +689,7 @@ class TextChapterLayout(
                     srcList = srcList,
                     clickList = clickList,
                     bodyHighlightStyles = bodyHighlightStyles.takeIf { !content.contains("<img") },
-                    bodyHighlightStart = bodyHighlightStyles.startAt(contentIndex)
+                    bodyHighlightStart = bodyHighlightStyles.startAt(contentIndex),
                 )
             } else {
                 if (isSingleImageStyle && isSetTypedImage) {
@@ -770,7 +774,7 @@ class TextChapterLayout(
                                         "TEXT",
                                         isFirstLine = isFirstLine,
                                         srcList = srcList,
-                                        clickList = clickList
+                                        clickList = clickList,
                                     )
                                     sb.setLength(0)
                                     isFirstLine = false
@@ -782,7 +786,7 @@ class TextChapterLayout(
                                     style,
                                     imgSize,
                                     click,
-                                    isAnimated
+                                    isAnimated,
                                 )
                                 isSetTypedImage = true
                             }
@@ -800,7 +804,7 @@ class TextChapterLayout(
                 }
                 text = sb.toString()
                 if (text.isNotBlank()) {
-                    wordCount += text.replace(noWordCountRegex,"").length
+                    wordCount += text.replace(noWordCountRegex, "").length
                     setTypeText(
                         book,
                         text,
@@ -812,7 +816,7 @@ class TextChapterLayout(
                         srcList = srcList,
                         clickList = clickList,
                         bodyHighlightStyles = bodyHighlightStyles.takeIf { !content.contains("<img") },
-                        bodyHighlightStart = bodyHighlightStyles.startAt(contentIndex)
+                        bodyHighlightStart = bodyHighlightStyles.startAt(contentIndex),
                     )
                 }
             }
@@ -850,7 +854,7 @@ class TextChapterLayout(
         imageStyle: String?,
         size: Size,
         click: String?,
-        isAnimated: Boolean = false
+        isAnimated: Boolean = false,
     ) {
         if (size.width > 0 && size.height > 0) {
             prepareNextPageIfNeed(durY)
@@ -922,8 +926,8 @@ class TextChapterLayout(
                     end = absStartX + end.toFloat(),
                     src = src,
                     click = click,
-                    isAnimated = isAnimated
-                )
+                    isAnimated = isAnimated,
+                ),
             )
             calcTextLinePosition(textPages, textLine, stringBuilder.length)
             stringBuilder.append(" ") // 确保翻页时索引计算正确
@@ -945,9 +949,9 @@ class TextChapterLayout(
             SpannableStringBuilder(
                 htmlContent.parseAsHtml(
                     HtmlCompat.FROM_HTML_MODE_COMPACT,
-                    tagHandler = textViewTagHandler
-                )
-            )
+                    tagHandler = textViewTagHandler,
+                ),
+            ),
         )
         val width = visibleWidth
         val textPaint = contentPaint
@@ -969,25 +973,25 @@ class TextChapterLayout(
                 Layout.Alignment.ALIGN_NORMAL,
                 1f,
                 0f,
-                true
+                true,
             )
         }
         val tempPaint = TextPaint(textPaint)
         for (lineIndex in 0 until staticLayout.lineCount) {
             val lineStart = staticLayout.getLineStart(lineIndex)
             val lineEnd = staticLayout.getLineEnd(lineIndex)
-            if (lineStart == lineEnd) { //这一行没有内容，跳过
+            if (lineStart == lineEnd) { // 这一行没有内容，跳过
                 continue
             }
             val textLine = TextLine(isHtml = true)
             val lineText = StringBuilder()
             val lineLeft = staticLayout.getLineLeft(lineIndex)
-            textLine.startX = absStartX + lineLeft //x坐标
+            textLine.startX = absStartX + lineLeft // x坐标
             val mLineTop = staticLayout.getLineTop(lineIndex).toFloat()
             val mLineBottom = staticLayout.getLineBottom(lineIndex).toFloat()
             val lineHeight = mLineBottom - mLineTop
             prepareNextPageIfNeed(durY + lineHeight)
-            textLine.upTopBottom(durY, lineHeight, textPaint.fontMetrics) //y坐标
+            textLine.upTopBottom(durY, lineHeight, textPaint.fontMetrics) // y坐标
 
             val columns = mutableListOf<BaseColumn>()
             var charIndex = lineStart
@@ -996,7 +1000,7 @@ class TextChapterLayout(
                 lineText.append(char)
                 if (char == "\n") {
                     textLine.isParagraphEnd = true
-                    durY += lineHeight * paragraphSpacing / 10f //段距
+                    durY += lineHeight * paragraphSpacing / 10f // 段距
                     charIndex++
                     continue
                 }
@@ -1011,15 +1015,22 @@ class TextChapterLayout(
                 val bgImage = highlightStyle?.bgImage ?: ""
                 val bgImageFit = highlightStyle?.bgImageFit ?: 0
                 val bgImageScale = highlightStyle?.bgImageScale ?: 1f
+                val highlightFontPath = extractFontPath(spanned, charIndex)
                 val charRight = if (charIndex + 1 < lineEnd) {
                     staticLayout.getPrimaryHorizontal(charIndex + 1)
                 } else {
                     tempPaint.textSize = textSize
+                    // 行尾字符无下一列可取坐标，需按该字符实际字体测宽，保持与绘制一致
+                    tempPaint.typeface = HighlightFontCache.getTypefaceFor(
+                        highlightFontPath,
+                        textPaint.typeface,
+                    ) ?: textPaint.typeface
                     val charWidth = tempPaint.measureText(char)
                     charX + charWidth
                 }
                 var needAddText = true
-                spanned.getSpans(charIndex, charIndex + 1, ImageSpan::class.java).firstOrNull()?.let { span -> //处理图片
+                spanned.getSpans(charIndex, charIndex + 1, ImageSpan::class.java).firstOrNull()?.let { span ->
+                    // 处理图片
                     val source = span.source ?: return@let
                     val urlMatcher = paramPattern.matcher(source)
                     if (urlMatcher.find()) {
@@ -1032,8 +1043,11 @@ class TextChapterLayout(
                         val forcedBubbleSrc = bubbleResult.renderSrc
                         val isForcedBubble = ParagraphBubbleRenderer.isBubbleSrc(forcedBubbleSrc) &&
                             !ParagraphBubbleRenderer.isBubbleSrc(source)
-                        val click = if (isForcedBubble) bubbleResult.click
-                            else listOfNotNull(urlOption["pclick"]?.takeIf { it.isNotBlank() }, urlOption["click"]?.takeIf { it.isNotBlank() }).firstOrNull()
+                        val click = if (isForcedBubble) {
+                            bubbleResult.click
+                        } else {
+                            listOfNotNull(urlOption["pclick"]?.takeIf { it.isNotBlank() }, urlOption["click"]?.takeIf { it.isNotBlank() }).firstOrNull()
+                        }
                         val effectiveSrc = if (isForcedBubble) forcedBubbleSrc else source
                         var imgSize = ImageProvider.getImageSize(book, effectiveSrc, ReadBook.bookSource)
                         val isAnimated = if (isForcedBubble) false else ImageProvider.isGif(book, source, ReadBook.bookSource)
@@ -1072,8 +1086,8 @@ class TextChapterLayout(
                                         end = absStartX + charRight,
                                         src = renderSrc,
                                         click = click,
-                                        isAnimated = if (ParagraphBubbleRenderer.isBubbleSrc(renderSrc)) false else isAnimated
-                                    )
+                                        isAnimated = if (ParagraphBubbleRenderer.isBubbleSrc(renderSrc)) false else isAnimated,
+                                    ),
                                 )
                             }
                             else -> {
@@ -1084,7 +1098,7 @@ class TextChapterLayout(
                                     iStyle,
                                     imgSize,
                                     click,
-                                    isAnimated
+                                    isAnimated,
                                 )
                             }
                         }
@@ -1099,8 +1113,8 @@ class TextChapterLayout(
                                     end = absStartX + charRight,
                                     src = forcedSrc,
                                     click = bubbleResult.click,
-                                    isAnimated = false
-                                )
+                                    isAnimated = false,
+                                ),
                             )
                         } else {
                             val imgSize = ImageProvider.getImageSize(book, source, ReadBook.bookSource)
@@ -1112,13 +1126,14 @@ class TextChapterLayout(
                                 imageStyle,
                                 imgSize,
                                 null,
-                                isAnimated
+                                isAnimated,
                             )
                         }
                     }
                     needAddText = false
                 }
-                spanned.getSpans(charIndex, charIndex + 1, ReplacementSpan::class.java).firstOrNull()?.let { _ -> //自定义标签
+                spanned.getSpans(charIndex, charIndex + 1, ReplacementSpan::class.java).firstOrNull()?.let { _ ->
+                    // 自定义标签
                     if (char == HR_PLACE_CHAR) {
                         columns.add(
                             TextHtmlColumn(
@@ -1133,8 +1148,9 @@ class TextChapterLayout(
                                 bgColor = bgColor,
                                 bgImage = bgImage,
                                 bgImageFit = bgImageFit,
-                                bgImageScale = bgImageScale
-                            )
+                                bgImageScale = bgImageScale,
+                                fontPath = highlightFontPath,
+                            ),
                         )
                         needAddText = false
                     }
@@ -1153,14 +1169,15 @@ class TextChapterLayout(
                             bgColor = bgColor,
                             bgImage = bgImage,
                             bgImageFit = bgImageFit,
-                            bgImageScale = bgImageScale
-                        )
+                            bgImageScale = bgImageScale,
+                            fontPath = highlightFontPath,
+                        ),
                     )
                 }
                 charIndex++
                 if (charIndex == lineEnd && lineIndex == staticLayout.lineCount - 1) {
                     textLine.isParagraphEnd = true
-                    durY += lineHeight * paragraphSpacing / 10f //段距
+                    durY += lineHeight * paragraphSpacing / 10f // 段距
                 }
             }
             textLine.text = lineText.toString()
@@ -1173,7 +1190,7 @@ class TextChapterLayout(
             stringBuilder.append(lineText)
             val textPage = pendingTextPage
             textPage.addLine(textLine)
-            durY += lineHeight * lineSpacingExtra //行距
+            durY += lineHeight * lineSpacingExtra // 行距
             if (textPage.height < durY) {
                 textPage.height = durY
             }
@@ -1186,7 +1203,7 @@ class TextChapterLayout(
     private fun justifyHtmlLine(
         columns: MutableList<BaseColumn>,
         textLine: TextLine,
-        lineWidth: Int
+        lineWidth: Int,
     ) {
         if (columns.isEmpty()) return
         // 计算当前行的总宽度
@@ -1279,11 +1296,73 @@ class TextChapterLayout(
         return foregroundSpans.lastOrNull()?.foregroundColor
     }
 
+    private fun extractFontPath(spanned: Spanned, index: Int): String {
+        val spans = spanned.getSpans(index, index + 1, HighlightTypefaceSpan::class.java)
+        return spans.lastOrNull()?.fontPath.orEmpty()
+    }
+
+    /**
+     * 高亮规则指定字体时，按高亮字体重新测量对应字符宽度，
+     * 保证排版宽度与最终绘制一致。
+     */
+    private fun adjustWidthsForHighlightFont(
+        text: String,
+        widthsArray: FloatArray,
+        charStyles: Array<CharStyle?>?,
+        textPaint: TextPaint,
+    ) {
+        if (charStyles == null) return
+        for (i in text.indices) {
+            val fontPath = charStyles[i]?.font
+            if (fontPath.isNullOrEmpty()) continue
+            // 原 width 为 0 的下标属于代理对/组合字符簇的延续，重测会破坏聚类
+            if (widthsArray[i] <= 0f) continue
+            val typeface = HighlightFontCache.getTypefaceFor(fontPath, textPaint.typeface) ?: continue
+            highlightFontPaint.textSize = textPaint.textSize
+            highlightFontPaint.letterSpacing = textPaint.letterSpacing
+            highlightFontPaint.textScaleX = textPaint.textScaleX
+            highlightFontPaint.textSkewX = textPaint.textSkewX
+            highlightFontPaint.typeface = typeface
+            widthsArray[i] = highlightFontPaint.measureText(text, i, i + 1)
+        }
+    }
+
+    /**
+     * 存在高亮字体时，把命中区间包成带 HighlightTypefaceSpan 的 SpannableString，
+     * 让 StaticLayout 断行测量与逐字符列宽使用同一套字体，避免行宽错位。
+     */
+    private fun buildFontAwareLayoutText(
+        text: String,
+        charStyles: Array<CharStyle?>?,
+    ): CharSequence {
+        if (charStyles == null) return text
+        var spanStart = -1
+        var spanFont = ""
+        var spannable: SpannableString? = null
+        for (i in 0..text.length) {
+            val font = if (i < text.length) charStyles[i]?.font.orEmpty() else ""
+            if (font != spanFont) {
+                if (spanFont.isNotEmpty() && spanStart in 0 until i) {
+                    val sb = spannable ?: SpannableString(text).also { spannable = it }
+                    sb.setSpan(
+                        HighlightTypefaceSpan(spanFont),
+                        spanStart,
+                        i,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                    )
+                }
+                spanStart = i
+                spanFont = font
+            }
+        }
+        return spannable ?: text
+    }
+
     private fun extractHighlightStyle(spanned: CharSequence, index: Int): HighlightStyleSpan? {
         val spans = (spanned as? Spanned)?.getSpans(
             index,
             index + 1,
-            HighlightStyleSpan::class.java
+            HighlightStyleSpan::class.java,
         ) ?: return null
         if (spans.isEmpty()) return null
         var underlineMode = 0
@@ -1341,7 +1420,6 @@ class TextChapterLayout(
         return null
     }
 
-
     /**
      * 对整章正文做一次高亮匹配，构建每字符样式数组。
      *
@@ -1364,7 +1442,7 @@ class TextChapterLayout(
         }
         return BodyHighlightStyles(
             createHighlightStyles(fullText.toString(), isTitle = false),
-            starts
+            starts,
         )
     }
 
@@ -1396,7 +1474,7 @@ class TextChapterLayout(
 
     private fun applyHighlightRules(
         spannable: SpannableStringBuilder,
-        isTitle: Boolean = false
+        isTitle: Boolean = false,
     ): SpannableStringBuilder {
         compiledHighlightRules.forEach { compiled ->
             // 按标题/正文作用域和书籍作用域过滤
@@ -1409,7 +1487,7 @@ class TextChapterLayout(
     private fun applyRuleSpans(
         spannable: SpannableStringBuilder,
         rule: HighlightRule,
-        regex: Regex
+        regex: Regex,
     ) {
         regex.findAll(spannable).forEach { match ->
             val start = match.range.first
@@ -1431,7 +1509,16 @@ class TextChapterLayout(
                 ForegroundColorSpan(color),
                 start,
                 end,
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+        if (style.font.isNotBlank()) {
+            // 字体属于影响测量的样式，StaticLayout 排版需要 MetricAffectingSpan
+            spannable.setSpan(
+                HighlightTypefaceSpan(style.font),
+                start,
+                end,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
             )
         }
         if (style.hasDecoration) {
@@ -1439,7 +1526,7 @@ class TextChapterLayout(
                 HighlightStyleSpan(style),
                 start,
                 end,
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
             )
         }
     }
@@ -1469,6 +1556,7 @@ class TextChapterLayout(
         }
         val widthsArray = allocateFloatArray(text.length)
         textPaint.getTextWidthsCompat(text, widthsArray, reviewCharWidth)
+        adjustWidthsForHighlightFont(text, widthsArray, charStyles, textPaint)
         // 调整气泡内联宽度
         if (srcList != null && srcList.isNotEmpty()) {
             var imageIndex = 0
@@ -1487,10 +1575,18 @@ class TextChapterLayout(
             val indentSize = if (isFirstLine) paragraphIndent.length else 0
             ZhLayout(text, textPaint, visibleWidth, words, widths, indentSize)
         } else {
-            StaticLayout(text, textPaint, visibleWidth, Layout.Alignment.ALIGN_NORMAL, 0f, 0f, true)
+            StaticLayout(
+                buildFontAwareLayoutText(text, charStyles),
+                textPaint,
+                visibleWidth,
+                Layout.Alignment.ALIGN_NORMAL,
+                0f,
+                0f,
+                true,
+            )
         }
         durY = when {
-            //标题y轴居中
+            // 标题y轴居中
             emptyContent && textPages.isEmpty() -> {
                 val textPage = pendingTextPage
                 if (textPage.lineSize == 0) {
@@ -1535,19 +1631,21 @@ class TextChapterLayout(
             textLine.text = lineText
             when (lineIndex) {
                 0 if layout.lineCount > 1 && !isTitle && isFirstLine -> {
-                    //多行的第一行 非标题
+                    // 多行的第一行 非标题
                     addCharsToLineFirst(
                         book, absStartX, textLine, words, textPaint,
-                        desiredWidth, widths, srcList, clickList, charStyles, lineStart
+                        desiredWidth, widths, srcList, clickList, charStyles, lineStart,
                     )
                 }
                 layout.lineCount - 1 -> {
-                    //最后一行、单行
-                    //标题x轴对齐
+                    // 最后一行、单行
+                    // 标题x轴对齐
                     val startX = if (isTitle) {
                         when {
-                            isMiddleTitle || emptyContent || isVolumeTitle
-                                    || imageStyle?.uppercase() == Book.imgStyleSingle -> {
+                            isMiddleTitle ||
+                                emptyContent ||
+                                isVolumeTitle ||
+                                imageStyle?.uppercase() == Book.imgStyleSingle -> {
                                 (visibleWidth - desiredWidth) / 2
                             }
                             isRightTitle -> visibleWidth - desiredWidth
@@ -1558,15 +1656,17 @@ class TextChapterLayout(
                     }
                     addCharsToLineNatural(
                         book, absStartX, textLine, words,
-                        startX, !isTitle && lineIndex == 0, widths, srcList, clickList, charStyles, lineStart
+                        startX, !isTitle && lineIndex == 0, widths, srcList, clickList, charStyles, lineStart,
                     )
                 }
                 else -> {
                     if (isTitle) {
-                        //标题对齐
+                        // 标题对齐
                         val startX = when {
-                            isMiddleTitle || emptyContent || isVolumeTitle
-                                    || imageStyle?.uppercase() == Book.imgStyleSingle -> {
+                            isMiddleTitle ||
+                                emptyContent ||
+                                isVolumeTitle ||
+                                imageStyle?.uppercase() == Book.imgStyleSingle -> {
                                 (visibleWidth - desiredWidth) / 2
                             }
                             isRightTitle -> visibleWidth - desiredWidth
@@ -1574,13 +1674,13 @@ class TextChapterLayout(
                         }
                         addCharsToLineNatural(
                             book, absStartX, textLine, words,
-                            startX, false, widths, srcList, clickList, charStyles, lineStart
+                            startX, false, widths, srcList, clickList, charStyles, lineStart,
                         )
                     } else {
-                        //中间行
+                        // 中间行
                         addCharsToLineMiddle(
                             book, absStartX, textLine, words, textPaint,
-                            desiredWidth, 0f, widths, srcList, clickList, charStyles, lineStart
+                            desiredWidth, 0f, widths, srcList, clickList, charStyles, lineStart,
                         )
                     }
                 }
@@ -1604,7 +1704,7 @@ class TextChapterLayout(
     private fun calcTextLinePosition(
         textPages: ArrayList<TextPage>,
         textLine: TextLine,
-        sbLength: Int
+        sbLength: Int,
     ) {
         val lastLine = pendingTextPage.lines.lastOrNull { it.paragraphNum > 0 }
             ?: textPages.lastOrNull()?.lines?.lastOrNull { it.paragraphNum > 0 }
@@ -1615,9 +1715,11 @@ class TextChapterLayout(
         }
         textLine.paragraphNum = paragraphNum
         textLine.chapterPosition =
-            (textPages.lastOrNull()?.lines?.lastOrNull()?.run {
-                chapterPosition + charSize + if (isParagraphEnd) 1 else 0
-            } ?: 0) + sbLength
+            (
+                textPages.lastOrNull()?.lines?.lastOrNull()?.run {
+                    chapterPosition + charSize + if (isParagraphEnd) 1 else 0
+                } ?: 0
+                ) + sbLength
         textLine.pagePosition = sbLength
     }
 
@@ -1642,7 +1744,7 @@ class TextChapterLayout(
         if (!textFullJustify) {
             addCharsToLineNatural(
                 book, absStartX, textLine, words,
-                x, true, textWidths, srcList, clickList, charStyles, lineStart
+                x, true, textWidths, srcList, clickList, charStyles, lineStart,
             )
             return
         }
@@ -1653,8 +1755,8 @@ class TextChapterLayout(
                 TextColumn(
                     charData = ChapterProvider.indentChar,
                     start = absStartX + x,
-                    end = absStartX + x1
-                )
+                    end = absStartX + x1,
+                ),
             )
             x = x1
             textLine.indentWidth = x
@@ -1665,7 +1767,7 @@ class TextChapterLayout(
             val textWidths1 = textWidths.subList(bodyIndent.length, textWidths.size)
             addCharsToLineMiddle(
                 book, absStartX, textLine, text1, textPaint,
-                desiredWidth, x, textWidths1, srcList, clickList, charStyles, lineStart + bodyIndent.length
+                desiredWidth, x, textWidths1, srcList, clickList, charStyles, lineStart + bodyIndent.length,
             )
         }
     }
@@ -1693,7 +1795,7 @@ class TextChapterLayout(
             addCharsToLineNatural(
                 book, absStartX, textLine, words,
                 startX, false, textWidths, srcList,
-                clickList, charStyles, lineStart
+                clickList, charStyles, lineStart,
             )
             return
         }
@@ -1715,7 +1817,7 @@ class TextChapterLayout(
                 addCharToLine(
                     book, absStartX, textLine, char,
                     x, x1, index + 1 == words.size, srcList,
-                    clickList, charStyles, lineStart + index
+                    clickList, charStyles, lineStart + index,
                 )
                 x = x1
             }
@@ -1732,7 +1834,7 @@ class TextChapterLayout(
                 addCharToLine(
                     book, absStartX, textLine, char,
                     x, x1, index + 1 == words.size, srcList,
-                    clickList, charStyles, lineStart + index
+                    clickList, charStyles, lineStart + index,
                 )
                 x = x1
             }
@@ -1774,7 +1876,7 @@ class TextChapterLayout(
                 srcList,
                 clickList,
                 charStyles,
-                lineStart + index
+                lineStart + index,
             )
             x = x1
             if (hasIndent && index == indentLength - 1) {
@@ -1811,6 +1913,7 @@ class TextChapterLayout(
         val bgImage = style?.bgImage ?: ""
         val bgImageFit = style?.bgImageFit ?: 0
         val bgImageScale = style?.bgImageScale ?: 1f
+        val fontPath = style?.font.orEmpty()
         val column = when {
             !srcList.isNullOrEmpty() && (char == srcReplaceStr || char == reviewStr) -> {
                 val src = srcList.removeFirst()
@@ -1825,7 +1928,7 @@ class TextChapterLayout(
                     end = absStartX + xEnd,
                     src = src,
                     click = click,
-                    isAnimated = isAnimated
+                    isAnimated = isAnimated,
                 )
             }
 //            isLineEnd && char == ChapterProvider.reviewChar -> {
@@ -1850,7 +1953,8 @@ class TextChapterLayout(
                     bgColor = bgColor,
                     bgImage = bgImage,
                     bgImageFit = bgImageFit,
-                    bgImageScale = bgImageScale
+                    bgImageScale = bgImageScale,
+                    fontPath = fontPath,
                 )
             }
         }
@@ -1895,18 +1999,18 @@ class TextChapterLayout(
                 textPage.height = durY
             }
             if (doublePage && absStartX < viewWidth / 2) {
-                //当前页面左列结束
+                // 当前页面左列结束
                 textPage.leftLineSize = textPage.lineSize
                 absStartX = viewWidth / 2 + paddingLeft
             } else {
-                //当前页面结束,设置各种值
+                // 当前页面结束,设置各种值
                 if (textPage.leftLineSize == 0) {
                     textPage.leftLineSize = textPage.lineSize
                 }
                 textPage.text = stringBuilder.toString()
                 currentCoroutineContext().ensureActive()
                 onPageCompleted()
-                //新建页面
+                // 新建页面
                 pendingTextPage = TextPage()
                 stringBuilder.clear()
                 absStartX = paddingLeft
@@ -1925,7 +2029,7 @@ class TextChapterLayout(
     private fun measureTextSplit(
         text: String,
         widthsArray: FloatArray,
-        start: Int = 0
+        start: Int = 0,
     ): Pair<ArrayList<String>, ArrayList<Float>> {
         val length = text.length
         var clusterCount = 0
@@ -1972,6 +2076,7 @@ class TextChapterLayout(
                 bgImage = style.bgImage,
                 bgImageFit = style.bgImageFit,
                 bgImageScale = style.bgImageScale,
+                font = style.font,
             )
         }
     }
@@ -1987,8 +2092,7 @@ class TextChapterLayout(
         val styles: Array<CharStyle?>?,
         val starts: List<Int>,
     ) {
-        fun startAt(contentIndex: Int): Int =
-            starts.getOrElse(contentIndex) { 0 }
+        fun startAt(contentIndex: Int): Int = starts.getOrElse(contentIndex) { 0 }
 
         /**
          * 取指定偏移起、指定长度的样式切片，该范围内无任何样式时返回 null。
@@ -2034,9 +2138,7 @@ class TextChapterLayout(
      * 尝试将非气泡图片源转换为 bubble://paragraph URL（仅返回 renderSrc）。
      * 当需要同时保留 click 时请使用 [tryParseForcedBubbleSrcWithClick]。
      */
-    private fun tryParseForcedBubbleSrc(src: String): String {
-        return tryParseForcedBubbleSrcWithClick(src).renderSrc
-    }
+    private fun tryParseForcedBubbleSrc(src: String): String = tryParseForcedBubbleSrcWithClick(src).renderSrc
 
     /**
      * 尝试将非气泡图片源转换为 bubble://paragraph URL，同时保留原始 click 脚本。
@@ -2131,7 +2233,7 @@ class TextChapterLayout(
     private fun extractForcedBubbleDisplayText(
         src: String,
         renderSrc: String,
-        option: Map<String, String>
+        option: Map<String, String>,
     ): String? {
         listOf("displayText", "num", "\$num", "\${num}", "{{num}}", "count", "text", "label").forEach { key ->
             normalizeForcedBubbleText(option.valueIgnoreCase(key).orEmpty())?.let { return it }
@@ -2179,7 +2281,7 @@ class TextChapterLayout(
     private fun extractForcedBubbleColor(
         src: String,
         renderSrc: String,
-        option: Map<String, String>
+        option: Map<String, String>,
     ): String? {
         listOf("displayColor", "color", "\$color", "\${color}", "{{color}}").forEach { key ->
             normalizeForcedBubbleText(option.valueIgnoreCase(key).orEmpty())?.let { return it }
@@ -2193,13 +2295,11 @@ class TextChapterLayout(
     }
 
     /** 规范化气泡文本：去除 HTML 标签、trim、限制长度 */
-    private fun normalizeForcedBubbleText(raw: String): String? {
-        return HtmlCompat.fromHtml(raw, HtmlCompat.FROM_HTML_MODE_LEGACY)
-            .toString()
-            .trim()
-            .takeIf { it.isNotBlank() }
-            ?.take(24)
-    }
+    private fun normalizeForcedBubbleText(raw: String): String? = HtmlCompat.fromHtml(raw, HtmlCompat.FROM_HTML_MODE_LEGACY)
+        .toString()
+        .trim()
+        .takeIf { it.isNotBlank() }
+        ?.take(24)
 
     /** 解码 data:image/svg+xml URL */
     private fun decodeDataSvg(sourcePart: String): String? {
@@ -2214,9 +2314,7 @@ class TextChapterLayout(
         }.getOrNull()
     }
 
-    private fun Map<String, String>.valueIgnoreCase(key: String): String? {
-        return entries.firstOrNull { it.key.equals(key, ignoreCase = true) }?.value
-    }
+    private fun Map<String, String>.valueIgnoreCase(key: String): String? = entries.firstOrNull { it.key.equals(key, ignoreCase = true) }?.value
 
     //endregion
 
@@ -2230,9 +2328,16 @@ class TextChapterLayout(
         if (!AppConfig.forceSoftwareParagraphBubble) return contents
         val source = ReadBook.bookSource ?: return contents
 
+        // 限制气泡 js 执行并发：对话生成气泡场景下几乎每段正文都是含 js 字段的气泡，
+        // 全量并行执行会在瞬间向书源服务器发起大量请求（js 内含 java.ajax 等网络调用），
+        // 触发服务器限流/过载返回 HTML 错误页，连带正文的 /content 请求也拿到 HTML，
+        // 导致书源规则里的 JSON.parse 抛出
+        // "SyntaxError: Unexpected token: <"（表现为获取正文失败，刷新后可恢复）。
+        val jsSemaphore = Semaphore(BUBBLE_JS_MAX_CONCURRENCY)
+
         // 并行处理每个段落
         return contents.map { content ->
-            scope.async { preprocessBubbleJsInText(content, source) }
+            scope.async { preprocessBubbleJsInText(content, source, jsSemaphore) }
         }.awaitAll()
     }
 
@@ -2241,7 +2346,8 @@ class TextChapterLayout(
      */
     private suspend fun preprocessBubbleJsInText(
         text: String,
-        source: BaseSource
+        source: BaseSource,
+        jsSemaphore: Semaphore,
     ): String {
         val matcher = AppPattern.imgPattern.matcher(text)
         // 收集需要处理的 (start, end, originalSrc)
@@ -2254,11 +2360,13 @@ class TextChapterLayout(
         }
         if (tasks.isEmpty()) return text
 
-        // 段落内多个 img 的 JS 并行执行
+        // 段落内多个 img 的 JS 执行同样受全局信号量限制，避免并发请求轰炸书源服务器
         val results = tasks.map { (_, _, src) ->
             scope.async {
                 currentCoroutineContext().ensureActive()
-                executeBubbleJs(src, source)
+                jsSemaphore.withPermit {
+                    executeBubbleJs(src, source)
+                }
             }
         }.awaitAll()
 
@@ -2311,7 +2419,7 @@ class TextChapterLayout(
      */
     private suspend fun executeBubbleJs(
         src: String,
-        source: BaseSource
+        source: BaseSource,
     ): String? {
         val urlMatcher = paramPattern.matcher(src)
         if (!urlMatcher.find()) return null
@@ -2335,21 +2443,23 @@ class TextChapterLayout(
     }
 
     private companion object {
+        /** 气泡 js 执行的最大并发数，防止瞬时请求压垮书源服务器（见 preprocessBubbleJs 注释） */
+        private const val BUBBLE_JS_MAX_CONCURRENCY = 2
         val FORCED_BUBBLE_TEXT_REGEX = Regex(
             """<text\b[^>]*>(.*?)</text>""",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
         )
         val FORCED_BUBBLE_DISPLAY_PARAM_REGEX = Regex(
             """(?:^|[?&,])(?:displayText|num|\${'$'}num|\${'$'}\{num\}|\{\{num\}\}|count|text|label)=([^&,\s]{1,48})""",
-            RegexOption.IGNORE_CASE
+            RegexOption.IGNORE_CASE,
         )
         val FORCED_BUBBLE_COLOR_PARAM_REGEX = Regex(
             """(?:^|[?&,])(?:displayColor|color|\${'$'}color|\${'$'}\{color\}|\{\{color\}\})=([^&,\s]{1,32})""",
-            RegexOption.IGNORE_CASE
+            RegexOption.IGNORE_CASE,
         )
         val FORCED_BUBBLE_CREATE_SVG_COUNT_REGEX = Regex(
             """createSvg2?\s*\((?:[^,)]*,){3}\s*([0-9]{1,8})""",
-            RegexOption.IGNORE_CASE
+            RegexOption.IGNORE_CASE,
         )
         const val PARAGRAPH_BUBBLE_PREFIX = "dp:"
         val FORCED_BUBBLE_TYPES = setOf(
@@ -2364,5 +2474,4 @@ class TextChapterLayout(
             "paragraphcomment",
         )
     }
-
 }

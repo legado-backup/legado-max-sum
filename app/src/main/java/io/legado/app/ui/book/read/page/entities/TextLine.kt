@@ -8,10 +8,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import android.graphics.drawable.NinePatchDrawable
 import android.os.Build
-import android.text.TextPaint
 import androidx.annotation.Keep
-import androidx.core.graphics.toColorInt
 import io.legado.app.help.PaintPool
 import io.legado.app.help.book.isImage
 import io.legado.app.help.config.AppConfig
@@ -112,25 +111,19 @@ data class TextLine(
      * FIXED: 修复了当 textColumns 为空时调用 last() 导致的 NoSuchElementException
      * 同时修正了空列占位对象的构造函数参数，确保编译通过。
      */
-    fun getColumn(index: Int): BaseColumn {
-        return textColumns.getOrElse(index) {
-            textColumns.lastOrNull() ?: TextColumn(0f, 0f, "")
-        }
+    fun getColumn(index: Int): BaseColumn = textColumns.getOrElse(index) {
+        textColumns.lastOrNull() ?: TextColumn(0f, 0f, "")
     }
 
     /**
      * 从后向前获取指定位置的文本列
      */
-    fun getColumnReverseAt(index: Int, offset: Int = 0): BaseColumn {
-        return textColumns[textColumns.lastIndex - offset - index]
-    }
+    fun getColumnReverseAt(index: Int, offset: Int = 0): BaseColumn = textColumns[textColumns.lastIndex - offset - index]
 
     /**
      * 获取行内文本列数量
      */
-    fun getColumnsCount(): Int {
-        return textColumns.size
-    }
+    fun getColumnsCount(): Int = textColumns.size
 
     /**
      * 更新行的顶部、底部和基线位置
@@ -144,20 +137,16 @@ data class TextLine(
     /**
      * 判断触摸坐标是否在当前行范围内
      */
-    fun isTouch(x: Float, y: Float, relativeOffset: Float): Boolean {
-        return y > lineTop + relativeOffset
-                && y < lineBottom + relativeOffset
-                && x >= lineStart
-                && x <= lineEnd + 20.dpToPx()
-    }
+    fun isTouch(x: Float, y: Float, relativeOffset: Float): Boolean = y > lineTop + relativeOffset &&
+        y < lineBottom + relativeOffset &&
+        x >= lineStart &&
+        x <= lineEnd + 20.dpToPx()
 
     /**
      * 判断触摸Y坐标是否在当前行范围内
      */
-    fun isTouchY(y: Float, relativeOffset: Float): Boolean {
-        return y > lineTop + relativeOffset
-                && y < lineBottom + relativeOffset
-    }
+    fun isTouchY(y: Float, relativeOffset: Float): Boolean = y > lineTop + relativeOffset &&
+        y < lineBottom + relativeOffset
 
     /**
      * 判断行是否在可视区域内
@@ -376,7 +365,7 @@ data class TextLine(
             return false
         }
         return columns.none {
-            it is TextBaseColumn && (it.textColor != null || it.underlineMode != 0 || it.bgImage.isNotEmpty() || it.bgColor != null)
+            it is TextBaseColumn && (it.textColor != null || it.underlineMode != 0 || it.bgImage.isNotEmpty() || it.bgColor != null || it.fontPath.isNotEmpty())
         }
     }
 
@@ -384,10 +373,10 @@ data class TextLine(
         if (isImage || columns.isEmpty()) return
         // 检查是否有背景颜色或背景图片
         if (columns.none { (it as? TextBaseColumn)?.let { c -> c.bgImage.isNotEmpty() || c.bgColor != null } == true }) return
-        
+
         // 绘制背景颜色段
         drawBgColorSegments(canvas)
-        
+
         // 绘制背景图片段
         drawBgImageSegments(canvas)
     }
@@ -592,7 +581,7 @@ data class TextLine(
             height - searchPadding,
             searchRadius,
             searchRadius,
-            paint
+            paint,
         )
         PaintPool.recycle(paint)
     }
@@ -650,25 +639,25 @@ data class TextLine(
         }
         PaintPool.recycle(paint)
     }
-    
+
     private fun drawSvgPath(
         canvas: Canvas,
         startX: Float,
         endX: Float,
         lineY: Float,
         svgPathStr: String,
-        paint: Paint
+        paint: Paint,
     ) {
         val baseWidth = 100f
         val baseY = 50f
         val path = io.legado.app.ui.book.read.config.SvgPathParser.parse(svgPathStr) ?: return
-        
+
         val width = endX - startX
         val scaleX = width / baseWidth
         val scaleY = 1f
         val translateX = startX
         val translateY = lineY - baseY
-        
+
         canvas.save()
         canvas.translate(translateX, translateY)
         canvas.scale(scaleX, scaleY)
@@ -684,13 +673,22 @@ data class TextLine(
         bgImageFit: Int,
         bgImageScale: Float,
     ) {
+        val top = bgPaddingTop
+        val bottom = height - bgPaddingBottom
+        // 点九图优先：九宫格拉伸铺满匹配区域，平铺/裁剪等 bitmap 适配方式不适用
+        getBgNinePatchDrawable(bgImage)?.let { drawable ->
+            drawBgNinePatch(
+                drawable, canvas,
+                startX.toInt(), top.toInt(), endX.toInt(), bottom.toInt(),
+                getBgNinePatchInsets(bgImage)
+            )
+            return
+        }
         val bitmap = getBgBitmap(bgImage) ?: return
         val paint = PaintPool.obtain()
         paint.style = android.graphics.Paint.Style.FILL
         paint.isAntiAlias = true
         paint.isFilterBitmap = true
-        val top = bgPaddingTop
-        val bottom = height - bgPaddingBottom
         val rectWidth = endX - startX
         val rectHeight = bottom - top
         val scale = bgImageScale.coerceIn(0.1f, 5f)
@@ -722,7 +720,7 @@ data class TextLine(
                 val tileBitmap = if (scale != 1f) {
                     val sw = (bitmap.width * scale).toInt().coerceAtLeast(1)
                     val sh = (bitmap.height * scale).toInt().coerceAtLeast(1)
-                    getScaledBitmap("${bgImage}_s${scale}", bitmap, sw, sh)
+                    getScaledBitmap("${bgImage}_s$scale", bitmap, sw, sh)
                 } else {
                     bitmap
                 }
@@ -779,6 +777,23 @@ data class TextLine(
         private val einkUnderlineWidth = 1.dpToPx().toFloat()
         private val bgBitmapCache = android.util.LruCache<String, Bitmap>(16 * 1024 * 1024)
         private val bgScaledBitmapCache = android.util.LruCache<String, Bitmap>(8 * 1024 * 1024)
+        /** 点九图探测的尺寸上限：超过此尺寸的图不按点九图处理，避免主线程无采样全量解码 */
+        private const val NINE_PATCH_MAX_DIM = 1024
+        /** 内容区检测的 alpha 阈值，低于该值视为透明留白 */
+        private const val CONTENT_ALPHA_THRESHOLD = 16
+        /** 点九图包裹文字时内容区之外再向外延伸的余量（dp） */
+        private const val NINE_PATCH_WRAP_EXTRA_DP = 2
+        /** 点九图缓存：点九图不能按普通 bitmap 采样缩放，需整图解码后按九宫格拉伸；按字节数限额防止大图占满内存 */
+        private val bgNinePatchCache = object : android.util.LruCache<String, NinePatchDrawable>(8 * 1024 * 1024) {
+            override fun sizeOf(key: String, value: NinePatchDrawable): Int =
+                value.intrinsicWidth.coerceAtLeast(1) * value.intrinsicHeight.coerceAtLeast(1) * 4
+        }
+        /** 已确认不是点九图的路径，避免每次绘制重复解码探测 */
+        private val bgNotNinePatchPaths = java.util.Collections.newSetFromMap(
+            java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        )
+        /** 点九图内容区（非透明像素）外的透明留白缓存，绘制时据此向外扩展 bounds */
+        private val bgNinePatchInsets = java.util.concurrent.ConcurrentHashMap<String, android.graphics.Rect>()
         private val bgSampleWidth by lazy {
             appCtx.resources.displayMetrics.widthPixels
         }
@@ -794,44 +809,175 @@ data class TextLine(
             return bitmap
         }
 
+        /**
+         * 获取点九图（.9.png）背景的 NinePatchDrawable。
+         * 探测依据是 PNG 内嵌的九宫格 chunk（BitmapFactory 解码后 ninePatchChunk 非空），
+         * 与文件名无关，迁移/重命名后的内部文件同样可识别。
+         */
+        fun getBgNinePatchDrawable(path: String): NinePatchDrawable? {
+            if (path.isBlank() || bgNotNinePatchPaths.contains(path)) return null
+            bgNinePatchCache.get(path)?.let { return it }
+            // loadBgNinePatch 仅在"确认非点九图"时写入否定缓存；IO/解码失败不缓存，文件恢复后仍可重试
+            return loadBgNinePatch(path)?.also { bgNinePatchCache.put(path, it) }
+        }
+
+        /**
+         * 获取点九图内容区（非透明像素）外的透明留白，单位为图片原始像素。
+         * 不依赖 .9 的 padding 指南（很多 .9 的留白并不在 padding 指南范围内），
+         * 而是加载时扫描非透明像素的实际包围盒得到。
+         */
+        fun getBgNinePatchInsets(path: String): android.graphics.Rect {
+            return bgNinePatchInsets[path] ?: android.graphics.Rect()
+        }
+
+        /**
+         * 点九图按"包裹内容"方式绘制：bounds 向外扩展内容区外的透明留白，
+         * 再额外外延 [NINE_PATCH_WRAP_EXTRA_DP]dp，使可见内容（气泡/边框）完全包裹住文字
+         * 并留有少量余量，与主题背景图把 .9 作为 View background 的观感一致。
+         * 每侧总扩展量不超过目标区域尺寸的 1/3，避免异常留白导致绘制区域失控。
+         */
+        fun drawBgNinePatch(
+            drawable: NinePatchDrawable,
+            canvas: Canvas,
+            left: Int,
+            top: Int,
+            right: Int,
+            bottom: Int,
+            insets: android.graphics.Rect,
+        ) {
+            val maxHorizontal = (right - left) / 3
+            val maxVertical = (bottom - top) / 3
+            val extra = NINE_PATCH_WRAP_EXTRA_DP.dpToPx()
+            drawable.setBounds(
+                left - insets.left.coerceAtMost(maxHorizontal - extra).coerceAtLeast(0) - extra,
+                top - insets.top.coerceAtMost(maxVertical - extra).coerceAtLeast(0) - extra,
+                right + insets.right.coerceAtMost(maxHorizontal - extra).coerceAtLeast(0) + extra,
+                bottom + insets.bottom.coerceAtMost(maxVertical - extra).coerceAtLeast(0) + extra,
+            )
+            drawable.draw(canvas)
+        }
+
+        private fun loadBgNinePatch(path: String): NinePatchDrawable? {
+            return try {
+                val input = openBgImageStream(path) ?: return null
+                input.use { stream ->
+                    val buffered = if (stream.markSupported()) stream else java.io.BufferedInputStream(stream)
+                    // 先只读尺寸：点九图背景通常很小，超大图不做无采样的全量解码，
+                    // 避免首次绘制时在主线程瞬时分配数十 MB 位图
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    buffered.mark(buffered.available())
+                    BitmapFactory.decodeStream(buffered, null, bounds)
+                    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+                    if (bounds.outWidth > NINE_PATCH_MAX_DIM || bounds.outHeight > NINE_PATCH_MAX_DIM) {
+                        bgNotNinePatchPaths.add(path)
+                        return null
+                    }
+                    buffered.reset()
+                    // 点九图不能带 inSampleSize 采样，否则拉伸区域度量失真
+                    val options = BitmapFactory.Options().apply { inScaled = false }
+                    val bitmap = BitmapFactory.decodeStream(buffered, null, options) ?: return null
+                    if (bitmap.ninePatchChunk == null) {
+                        bitmap.recycle()
+                        bgNotNinePatchPaths.add(path)
+                        return null
+                    }
+                    bgNinePatchInsets[path] = computeContentInsets(bitmap)
+                    NinePatchDrawable(appCtx.resources, android.graphics.NinePatch(bitmap, bitmap.ninePatchChunk, path))
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        /**
+         * 扫描非透明像素的实际包围盒，返回内容区距四边的留白（原始像素）。
+         * 仅在点九图加载时执行一次并缓存。
+         */
+        private fun computeContentInsets(bitmap: Bitmap): android.graphics.Rect {
+            val w = bitmap.width
+            val h = bitmap.height
+            if (w <= 0 || h <= 0) return android.graphics.Rect()
+            val pixels = IntArray(w * h)
+            bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+            fun rowHasContent(y: Int): Boolean {
+                val rowStart = y * w
+                for (x in 0 until w) {
+                    if (pixels[rowStart + x] ushr 24 > CONTENT_ALPHA_THRESHOLD) return true
+                }
+                return false
+            }
+            fun colHasContent(x: Int): Boolean {
+                for (y in 0 until h) {
+                    if (pixels[y * w + x] ushr 24 > CONTENT_ALPHA_THRESHOLD) return true
+                }
+                return false
+            }
+            var top = 0
+            var bottom = h - 1
+            var left = 0
+            var right = w - 1
+            while (top < bottom && !rowHasContent(top)) top++
+            while (bottom > top && !rowHasContent(bottom)) bottom--
+            while (left < right && !colHasContent(left)) left++
+            while (right > left && !colHasContent(right)) right--
+            return android.graphics.Rect(left, top, w - 1 - right, h - 1 - bottom)
+        }
+
+        private fun openBgImageStream(path: String): java.io.InputStream? = try {
+            when {
+                path.startsWith("assets://") -> appCtx.assets.open(path.removePrefix("assets://"))
+                path.startsWith("content://") ->
+                    appCtx.contentResolver.openInputStream(android.net.Uri.parse(path))
+                else -> {
+                    val file = java.io.File(path)
+                    if (file.exists()) {
+                        file.inputStream()
+                    } else {
+                        val assetPath = if (path.startsWith("bg/")) path else "bg/$path"
+                        kotlin.runCatching { appCtx.assets.open(assetPath) }.getOrNull()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+
         private fun getScaledBitmap(path: String, source: Bitmap, width: Int, height: Int): Bitmap {
             if (width <= 0 || height <= 0) return source
-            val key = "${path}_${width}_${height}"
+            val key = "${path}_${width}_$height"
             bgScaledBitmapCache.get(key)?.let { return it }
             val scaled = Bitmap.createScaledBitmap(source, width, height, true)
             bgScaledBitmapCache.put(key, scaled)
             return scaled
         }
 
-        private fun loadBgBitmap(path: String): Bitmap? {
-            return try {
-                val ctx = appCtx
-                if (path.startsWith("assets://")) {
-                    val assetPath = path.removePrefix("assets://")
-                    ctx.assets.open(assetPath).use { input ->
-                        decodeSampledBitmap(input)
-                    }
-                } else if (path.startsWith("content://")) {
-                    val uri = android.net.Uri.parse(path)
-                    ctx.contentResolver.openInputStream(uri)?.use { input ->
-                        decodeSampledBitmap(input)
-                    }
-                } else {
-                    val file = java.io.File(path)
-                    if (file.exists()) {
-                        decodeSampledBitmapFile(path)
-                    } else {
-                        val assetPath = if (path.startsWith("bg/")) path else "bg/$path"
-                        kotlin.runCatching {
-                            ctx.assets.open(assetPath).use { input ->
-                                decodeSampledBitmap(input)
-                            }
-                        }.getOrNull()
-                    }
+        private fun loadBgBitmap(path: String): Bitmap? = try {
+            val ctx = appCtx
+            if (path.startsWith("assets://")) {
+                val assetPath = path.removePrefix("assets://")
+                ctx.assets.open(assetPath).use { input ->
+                    decodeSampledBitmap(input)
                 }
-            } catch (e: Exception) {
-                null
+            } else if (path.startsWith("content://")) {
+                val uri = android.net.Uri.parse(path)
+                ctx.contentResolver.openInputStream(uri)?.use { input ->
+                    decodeSampledBitmap(input)
+                }
+            } else {
+                val file = java.io.File(path)
+                if (file.exists()) {
+                    decodeSampledBitmapFile(path)
+                } else {
+                    val assetPath = if (path.startsWith("bg/")) path else "bg/$path"
+                    kotlin.runCatching {
+                        ctx.assets.open(assetPath).use { input ->
+                            decodeSampledBitmap(input)
+                        }
+                    }.getOrNull()
+                }
             }
+        } catch (e: Exception) {
+            null
         }
 
         private fun decodeSampledBitmap(input: java.io.InputStream): Bitmap? {
@@ -856,7 +1002,7 @@ data class TextLine(
         private fun calculateInSampleSize(
             options: BitmapFactory.Options,
             reqWidth: Int,
-            reqHeight: Int
+            reqHeight: Int,
         ): Int {
             val (height, width) = options.outHeight to options.outWidth
             var inSampleSize = 1
@@ -873,6 +1019,9 @@ data class TextLine(
         fun clearBgBitmapCache() {
             bgBitmapCache.evictAll()
             bgScaledBitmapCache.evictAll()
+            bgNinePatchCache.evictAll()
+            bgNotNinePatchPaths.clear()
+            bgNinePatchInsets.clear()
         }
 
         fun copyBgImageToInternal(context: android.content.Context, sourcePath: String): String? {
@@ -936,5 +1085,4 @@ data class TextLine(
             }
         }
     }
-
 }

@@ -17,6 +17,8 @@ data class HighlightRuleStyle(
     val bgImage: String,
     val bgImageFit: Int,
     val bgImageScale: Float,
+    /** 高亮字体路径，空串表示跟随阅读字体 */
+    val font: String = "",
 ) {
 
     val resolvedTextColor: Int
@@ -29,19 +31,18 @@ data class HighlightRuleStyle(
         get() = underlineMode != 0 || bgImage.isNotBlank() || bgColor != null
 
     companion object {
-        fun from(rule: HighlightRule): HighlightRuleStyle {
-            return HighlightRuleStyle(
-                textColor = rule.textColor,
-                underlineMode = rule.underlineMode,
-                underlineColor = rule.underlineColor,
-                underlineWidth = rule.underlineWidth,
-                underlineOffset = rule.underlineOffset,
-                underlineSvgPath = rule.underlineSvgPath.orEmpty(),
-                bgColor = rule.bgColor,
-                bgImage = rule.bgImage.orEmpty(),
-                bgImageFit = rule.bgImageFit,
-                bgImageScale = rule.bgImageScale,
-            )
-        }
+        fun from(rule: HighlightRule): HighlightRuleStyle = HighlightRuleStyle(
+            textColor = rule.textColor,
+            underlineMode = rule.underlineMode,
+            underlineColor = rule.underlineColor,
+            underlineWidth = rule.underlineWidth,
+            underlineOffset = rule.underlineOffset,
+            underlineSvgPath = rule.underlineSvgPath.orEmpty(),
+            bgColor = rule.bgColor,
+            bgImage = rule.bgImage.orEmpty(),
+            bgImageFit = rule.bgImageFit,
+            bgImageScale = rule.bgImageScale,
+            font = rule.font.orEmpty(),
+        )
     }
 }

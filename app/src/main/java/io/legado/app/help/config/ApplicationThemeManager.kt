@@ -6,10 +6,10 @@ import androidx.annotation.Keep
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.repository.CoverGalleryRepository
+import io.legado.app.help.DefaultData
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
-import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.postEvent
@@ -48,6 +48,48 @@ object ApplicationThemeManager {
     internal const val maxCoverImages = 500
     private val filePath = FileUtils.getPath(appCtx.filesDir, fileName)
 
+    /** 内置默认应用主题的固定 ID，不落盘，不可删除、不可重命名、不可编辑，始终显示在列表首位 */
+    const val builtinThemeId = "builtin_default_app_theme"
+
+    /** 内置默认应用主题引用的 assets 默认阅读主题名（日间/夜间） */
+    private const val builtinDayThemeName = "蓝煤灰"
+    private const val builtinNightThemeName = "黑白"
+
+    /**
+     * 内置默认应用主题：日间用「蓝煤灰」、夜间用「黑白」，顶栏/底栏取默认内置配置，封面图集不设置。
+     * 日夜间子主题取 assets 默认阅读主题的拷贝，找不到同名时回退到该模式的第一个默认主题。
+     * 注意：深拷贝的前提是 [ThemeConfig.Config] 只含原始类型/String 字段；若日后增加集合等
+     * 可变引用字段，[builtinConfigCopy] 需要同步加深拷贝层级。
+     */
+    private val builtinConfig: Config by lazy {
+        val defaults = DefaultData.themeConfigs
+        val navConfigs = NavigationBarConfig.loadConfigs(appCtx)
+        Config(
+            id = builtinThemeId,
+            dayTheme = (
+                defaults.firstOrNull { !it.isNightTheme && it.themeName == builtinDayThemeName }
+                    ?: defaults.firstOrNull { !it.isNightTheme }
+                )?.copy(backgroundImgPath = null),
+            nightTheme = (
+                defaults.firstOrNull { it.isNightTheme && it.themeName == builtinNightThemeName }
+                    ?: defaults.firstOrNull { it.isNightTheme }
+                )?.copy(backgroundImgPath = null),
+            dayBottomBarId = navConfigs.firstOrNull { !it.isNight && it.isBuiltin }?.id,
+            nightBottomBarId = navConfigs.firstOrNull { it.isNight && it.isBuiltin }?.id,
+            updatedAt = 0L,
+        )
+    }
+
+    /**
+     * 深拷贝内置默认主题，避免列表项与共享实例互相影响可变字段；
+     * 名称现场读取，语言切换后无需重启进程即可更新显示名。
+     */
+    private fun builtinConfigCopy(): Config = builtinConfig.copy(
+        name = appCtx.getString(R.string.application_theme_builtin_name),
+        dayTheme = builtinConfig.dayTheme?.copy(),
+        nightTheme = builtinConfig.nightTheme?.copy(),
+    )
+
     /**
      * 应用主题配置数据类。
      *
@@ -77,7 +119,7 @@ object ApplicationThemeManager {
         var nightBottomBarId: String? = null,
         var dayCoverGroupId: Long? = null,
         var nightCoverGroupId: Long? = null,
-        var updatedAt: Long = System.currentTimeMillis()
+        var updatedAt: Long = System.currentTimeMillis(),
     )
 
     /** zip 包内部数据结构，包含清单和各子配置的打包数据 */
@@ -90,14 +132,14 @@ object ApplicationThemeManager {
         val dayBottomBar: NavigationBarConfig? = null,
         val nightBottomBar: NavigationBarConfig? = null,
         val dayCover: CoverPayload? = null,
-        val nightCover: CoverPayload? = null
+        val nightCover: CoverPayload? = null,
     )
 
     /** zip 包内封面图集的载荷数据 */
     @Keep
     private data class CoverPayload(
         val name: String,
-        val images: List<String>
+        val images: List<String>,
     )
 
     /**
@@ -113,7 +155,7 @@ object ApplicationThemeManager {
         NATIVE,
         ARCHIVE,
         MD3,
-        RED
+        RED,
     }
 
     /** 导入应用主题时的可选创建范围，日夜间可独立控制 */
@@ -126,7 +168,7 @@ object ApplicationThemeManager {
         val importDayBottomBar: Boolean = true,
         val importNightBottomBar: Boolean = true,
         val importDayCover: Boolean = true,
-        val importNightCover: Boolean = true
+        val importNightCover: Boolean = true,
     )
 
     /** 删除应用主题时的可选范围，控制是否一并删除关联组件，默认全部不勾选 */
@@ -139,7 +181,7 @@ object ApplicationThemeManager {
         val deleteDayBottomBar: Boolean = false,
         val deleteNightBottomBar: Boolean = false,
         val deleteDayCover: Boolean = false,
-        val deleteNightCover: Boolean = false
+        val deleteNightCover: Boolean = false,
     )
 
     /** 将导入选项持久化到 SharedPreferences */
@@ -155,18 +197,16 @@ object ApplicationThemeManager {
     }
 
     /** 从 SharedPreferences 读取持久化的导入选项，默认全部为 true */
-    fun getImportOptions(context: Context): ImportOptions {
-        return ImportOptions(
-            importDayTheme = context.getPrefBoolean(PreferKey.appThemeImportDayTheme, true),
-            importNightTheme = context.getPrefBoolean(PreferKey.appThemeImportNightTheme, true),
-            importDayTopBar = context.getPrefBoolean(PreferKey.appThemeImportDayTopBar, true),
-            importNightTopBar = context.getPrefBoolean(PreferKey.appThemeImportNightTopBar, true),
-            importDayBottomBar = context.getPrefBoolean(PreferKey.appThemeImportDayBottomBar, true),
-            importNightBottomBar = context.getPrefBoolean(PreferKey.appThemeImportNightBottomBar, true),
-            importDayCover = context.getPrefBoolean(PreferKey.appThemeImportDayCover, true),
-            importNightCover = context.getPrefBoolean(PreferKey.appThemeImportNightCover, true)
-        )
-    }
+    fun getImportOptions(context: Context): ImportOptions = ImportOptions(
+        importDayTheme = context.getPrefBoolean(PreferKey.appThemeImportDayTheme, true),
+        importNightTheme = context.getPrefBoolean(PreferKey.appThemeImportNightTheme, true),
+        importDayTopBar = context.getPrefBoolean(PreferKey.appThemeImportDayTopBar, true),
+        importNightTopBar = context.getPrefBoolean(PreferKey.appThemeImportNightTopBar, true),
+        importDayBottomBar = context.getPrefBoolean(PreferKey.appThemeImportDayBottomBar, true),
+        importNightBottomBar = context.getPrefBoolean(PreferKey.appThemeImportNightBottomBar, true),
+        importDayCover = context.getPrefBoolean(PreferKey.appThemeImportDayCover, true),
+        importNightCover = context.getPrefBoolean(PreferKey.appThemeImportNightCover, true),
+    )
 
     /** 将删除选项持久化到 SharedPreferences */
     fun saveDeleteOptions(context: Context, options: DeleteOptions) {
@@ -181,28 +221,39 @@ object ApplicationThemeManager {
     }
 
     /** 从 SharedPreferences 读取持久化的删除选项，默认全部为 false */
-    fun getDeleteOptions(context: Context): DeleteOptions {
-        return DeleteOptions(
-            deleteDayTheme = context.getPrefBoolean(PreferKey.appThemeDeleteDayTheme, false),
-            deleteNightTheme = context.getPrefBoolean(PreferKey.appThemeDeleteNightTheme, false),
-            deleteDayTopBar = context.getPrefBoolean(PreferKey.appThemeDeleteDayTopBar, false),
-            deleteNightTopBar = context.getPrefBoolean(PreferKey.appThemeDeleteNightTopBar, false),
-            deleteDayBottomBar = context.getPrefBoolean(PreferKey.appThemeDeleteDayBottomBar, false),
-            deleteNightBottomBar = context.getPrefBoolean(PreferKey.appThemeDeleteNightBottomBar, false),
-            deleteDayCover = context.getPrefBoolean(PreferKey.appThemeDeleteDayCover, false),
-            deleteNightCover = context.getPrefBoolean(PreferKey.appThemeDeleteNightCover, false)
-        )
+    fun getDeleteOptions(context: Context): DeleteOptions = DeleteOptions(
+        deleteDayTheme = context.getPrefBoolean(PreferKey.appThemeDeleteDayTheme, false),
+        deleteNightTheme = context.getPrefBoolean(PreferKey.appThemeDeleteNightTheme, false),
+        deleteDayTopBar = context.getPrefBoolean(PreferKey.appThemeDeleteDayTopBar, false),
+        deleteNightTopBar = context.getPrefBoolean(PreferKey.appThemeDeleteNightTopBar, false),
+        deleteDayBottomBar = context.getPrefBoolean(PreferKey.appThemeDeleteDayBottomBar, false),
+        deleteNightBottomBar = context.getPrefBoolean(PreferKey.appThemeDeleteNightBottomBar, false),
+        deleteDayCover = context.getPrefBoolean(PreferKey.appThemeDeleteDayCover, false),
+        deleteNightCover = context.getPrefBoolean(PreferKey.appThemeDeleteNightCover, false),
+    )
+
+    /** 从文件加载所有应用主题配置（内置默认主题始终排在首位且不落盘），自动校验大小和格式 */
+    fun load(): MutableList<Config> {
+        val items = loadPersisted()
+        items.add(0, builtinConfigCopy())
+        return items
     }
 
-    /** 从文件加载所有应用主题配置，自动校验大小和格式 */
-    fun load(): MutableList<Config> {
+    /** 判断是否为内置默认应用主题 */
+    fun isBuiltin(config: Config): Boolean = config.id == builtinThemeId
+
+    /** 从文件加载用户持久化的应用主题配置，不含内置默认主题 */
+    private fun loadPersisted(): MutableList<Config> {
         val file = File(filePath)
         if (!file.isFile) return mutableListOf()
         require(file.length() <= maxConfigBytes) { appCtx.getString(R.string.app_theme_config_too_large) }
         val parsed = GSON.fromJsonArray<Config>(file.readText()).getOrElse {
             throw IllegalStateException(appCtx.getString(R.string.app_theme_config_corrupted), it)
         }
-        return parsed.map { sanitize(it) }.toMutableList()
+        return parsed.map { sanitize(it) }
+            // 防御历史落盘数据中残留的内置 ID，避免 load() 出现重复的内置项
+            .filterNot { it.id == builtinThemeId }
+            .toMutableList()
     }
 
     /** 获取当前激活的应用主题 ID */
@@ -213,19 +264,21 @@ object ApplicationThemeManager {
 
     /** 导出当前应用主题为 zip 文件（含所有关联资源） */
     fun exportCurrent(context: Context, format: ExportFormat = ExportFormat.NATIVE): File {
-        val current = (load().firstOrNull { isCurrent(context, it) }
-            ?: captureCurrent(context, appCtx.getString(io.legado.app.R.string.application_theme_manage)))
+        val current = (
+            load().firstOrNull { isCurrent(context, it) }
+                ?: captureCurrent(context, appCtx.getString(io.legado.app.R.string.application_theme_manage))
+            )
             .let { config ->
                 // 从 SharedPreferences 刷新背景图路径，确保导出的是当前实际使用的背景图。
                 // 用户可能通过「主题设置」偏好页面修改了背景图，而已保存的应用主题配置中
                 // 的 backgroundImgPath 可能仍是旧值。
                 config.copy(
                     dayTheme = config.dayTheme?.copy(
-                        backgroundImgPath = context.getPrefString(PreferKey.bgImage)
+                        backgroundImgPath = context.getPrefString(PreferKey.bgImage),
                     ),
                     nightTheme = config.nightTheme?.copy(
-                        backgroundImgPath = context.getPrefString(PreferKey.bgImageN)
-                    )
+                        backgroundImgPath = context.getPrefString(PreferKey.bgImageN),
+                    ),
                 )
             }
         if (format == ExportFormat.NATIVE) validateForApply(context, current)
@@ -233,13 +286,11 @@ object ApplicationThemeManager {
     }
 
     /** 导出指定应用主题为 zip 文件（含所有关联资源） */
-    fun exportConfig(context: Context, config: Config, format: ExportFormat = ExportFormat.NATIVE): File {
-        return when (format) {
-            ExportFormat.NATIVE -> exportNative(context, config)
-            ExportFormat.ARCHIVE -> ThemeExporter.exportArchive(context, config)
-            ExportFormat.MD3 -> ThemeExporter.exportMd3(context, config)
-            ExportFormat.RED -> ThemeExporter.exportRed(context, config)
-        }
+    fun exportConfig(context: Context, config: Config, format: ExportFormat = ExportFormat.NATIVE): File = when (format) {
+        ExportFormat.NATIVE -> exportNative(context, config)
+        ExportFormat.ARCHIVE -> ThemeExporter.exportArchive(context, config)
+        ExportFormat.MD3 -> ThemeExporter.exportMd3(context, config)
+        ExportFormat.RED -> ThemeExporter.exportRed(context, config)
     }
 
     /** 导出当前分支原生格式（application_theme.json 清单 + 所有资源） */
@@ -250,7 +301,7 @@ object ApplicationThemeManager {
             ZipOutputStream(outputStream().buffered()).use { zip ->
                 val packagedConfig = config.copy(
                     dayTheme = packageTheme(zip, config.dayTheme, "themes/day"),
-                    nightTheme = packageTheme(zip, config.nightTheme, "themes/night")
+                    nightTheme = packageTheme(zip, config.nightTheme, "themes/night"),
                 )
                 val data = PackageData(
                     config = packagedConfig,
@@ -259,7 +310,7 @@ object ApplicationThemeManager {
                     dayBottomBar = packageBottomBar(zip, context, false, config.dayBottomBarId, "bottombar/day"),
                     nightBottomBar = packageBottomBar(zip, context, true, config.nightBottomBarId, "bottombar/night"),
                     dayCover = packageCover(zip, config.dayCoverGroupId, "covers/day"),
-                    nightCover = packageCover(zip, config.nightCoverGroupId, "covers/night")
+                    nightCover = packageCover(zip, config.nightCoverGroupId, "covers/night"),
                 )
                 zip.putNextEntry(ZipEntry("application_theme.json"))
                 zip.write(GSON.toJson(data).toByteArray())
@@ -296,7 +347,7 @@ object ApplicationThemeManager {
         require(file.length() <= maxManifestBytes) { appCtx.getString(R.string.app_theme_file_too_large) }
         val imported = sanitize(
             GSON.fromJson(file.readText(), Config::class.java)
-                ?: throw IllegalArgumentException("Invalid application theme")
+                ?: throw IllegalArgumentException("Invalid application theme"),
         )
         return addImported(stripComponents(imported, options))
     }
@@ -335,7 +386,7 @@ object ApplicationThemeManager {
         zip: ZipFile,
         temp: File,
         manifestEntry: ZipEntry,
-        options: ImportOptions?
+        options: ImportOptions?,
     ): Config {
         require(manifestEntry.size in 0..maxManifestBytes) { appCtx.getString(R.string.app_theme_manifest_too_large) }
         val data = zip.getInputStream(manifestEntry).bufferedReader().use {
@@ -369,8 +420,8 @@ object ApplicationThemeManager {
                 dayBottomBarId = dayBottom,
                 nightBottomBarId = nightBottom,
                 dayCoverGroupId = dayCover,
-                nightCoverGroupId = nightCover
-            )
+                nightCoverGroupId = nightCover,
+            ),
         )
     }
 
@@ -390,19 +441,23 @@ object ApplicationThemeManager {
             dayBottomBarId = if (options.importDayBottomBar) config.dayBottomBarId else null,
             nightBottomBarId = if (options.importNightBottomBar) config.nightBottomBarId else null,
             dayCoverGroupId = if (options.importDayCover) config.dayCoverGroupId else null,
-            nightCoverGroupId = if (options.importNightCover) config.nightCoverGroupId else null
+            nightCoverGroupId = if (options.importNightCover) config.nightCoverGroupId else null,
         )
     }
 
     internal fun addImported(imported: Config): Config {
         val items = load()
         val baseName = imported.name.trim().ifBlank { appCtx.getString(io.legado.app.R.string.application_theme_manage) }
-        // 同名配置直接覆盖（复用原有 ID），避免反复追加“名称 2”
-        val existingIndex = items.indexOfFirst { it.name == baseName }
+        // 同名配置直接覆盖（复用原有 ID），避免反复追加“名称 2”；内置默认主题不参与同名覆盖
+        val existingIndex = items.indexOfFirst { it.id != builtinThemeId && it.name == baseName }
         val next = if (existingIndex >= 0) {
             imported.copy(id = items[existingIndex].id, name = baseName, updatedAt = System.currentTimeMillis())
         } else {
-            imported.copy(id = UUID.randomUUID().toString(), name = baseName, updatedAt = System.currentTimeMillis())
+            imported.copy(
+                id = UUID.randomUUID().toString(),
+                name = uniqueName(baseName, items.map { it.name }.toSet()),
+                updatedAt = System.currentTimeMillis(),
+            )
         }
         if (existingIndex >= 0) items[existingIndex] = next else items.add(next)
         save(items)
@@ -410,17 +465,15 @@ object ApplicationThemeManager {
     }
 
     /** 判断指定配置是否与当前系统状态完全匹配 */
-    fun isCurrent(context: Context, config: Config): Boolean {
-        return currentId(context) == config.id &&
-            (config.dayTheme == null || context.getPrefString(PreferKey.dThemeName).orEmpty() == config.dayTheme?.themeName) &&
-            (config.nightTheme == null || context.getPrefString(PreferKey.dNThemeName).orEmpty() == config.nightTheme?.themeName) &&
-            (config.dayTopBarDir.isBlank() || TopBarConfig.activeDirName(false) == config.dayTopBarDir) &&
-            (config.nightTopBarDir.isBlank() || TopBarConfig.activeDirName(true) == config.nightTopBarDir) &&
-            (config.dayBottomBarId == null || NavigationBarConfig.activeConfig(context, false).id == config.dayBottomBarId) &&
-            (config.nightBottomBarId == null || NavigationBarConfig.activeConfig(context, true).id == config.nightBottomBarId) &&
-            (config.dayCoverGroupId == null || selectedCoverGroupId(context, false) == config.dayCoverGroupId) &&
-            (config.nightCoverGroupId == null || selectedCoverGroupId(context, true) == config.nightCoverGroupId)
-    }
+    fun isCurrent(context: Context, config: Config): Boolean = currentId(context) == config.id &&
+        (config.dayTheme == null || context.getPrefString(PreferKey.dThemeName).orEmpty() == config.dayTheme?.themeName) &&
+        (config.nightTheme == null || context.getPrefString(PreferKey.dNThemeName).orEmpty() == config.nightTheme?.themeName) &&
+        (config.dayTopBarDir.isBlank() || TopBarConfig.activeDirName(false) == config.dayTopBarDir) &&
+        (config.nightTopBarDir.isBlank() || TopBarConfig.activeDirName(true) == config.nightTopBarDir) &&
+        (config.dayBottomBarId == null || NavigationBarConfig.activeConfig(context, false).id == config.dayBottomBarId) &&
+        (config.nightBottomBarId == null || NavigationBarConfig.activeConfig(context, true).id == config.nightBottomBarId) &&
+        (config.dayCoverGroupId == null || selectedCoverGroupId(context, false) == config.dayCoverGroupId) &&
+        (config.nightCoverGroupId == null || selectedCoverGroupId(context, true) == config.nightCoverGroupId)
 
     /** 从当前系统状态快照生成一个新配置 */
     fun captureCurrent(context: Context, name: String, id: String? = null): Config {
@@ -448,7 +501,7 @@ object ApplicationThemeManager {
             dayBottomBarId = NavigationBarConfig.activeConfig(context, false).id,
             nightBottomBarId = NavigationBarConfig.activeConfig(context, true).id,
             dayCoverGroupId = selectedCoverGroupId(context, false),
-            nightCoverGroupId = selectedCoverGroupId(context, true)
+            nightCoverGroupId = selectedCoverGroupId(context, true),
         )
     }
 
@@ -461,8 +514,9 @@ object ApplicationThemeManager {
         save(items)
     }
 
-    /** 替换配置（同 ID 覆盖，名称不能与其他配置重复） */
+    /** 替换配置（同 ID 覆盖，名称不能与其他配置重复）；内置默认主题固定不变，忽略覆盖 */
     fun replace(config: Config) {
+        if (config.id == builtinThemeId) return
         val items = load()
         require(config.name.isNotBlank())
         require(items.none { it.id != config.id && it.name == config.name })
@@ -471,8 +525,9 @@ object ApplicationThemeManager {
         save(items)
     }
 
-    /** 重命名配置 */
+    /** 重命名配置；内置默认主题名称固定，忽略重命名 */
     fun rename(id: String, name: String) {
+        if (id == builtinThemeId) return
         val items = load()
         val nextName = name.trim()
         require(nextName.isNotBlank())
@@ -484,8 +539,9 @@ object ApplicationThemeManager {
         }
     }
 
-    /** 删除配置，若删除的是当前配置则清除激活标记 */
+    /** 删除配置，若删除的是当前配置则清除激活标记；内置默认主题不可删除 */
     fun delete(context: Context, id: String) {
+        if (id == builtinThemeId) return
         save(load().filterNot { it.id == id })
         if (currentId(context) == id) context.putPrefString(currentIdKey, "")
     }
@@ -498,6 +554,8 @@ object ApplicationThemeManager {
      * @param options 删除选项，控制是否一并删除关联的主题、顶栏、底栏、封面图集
      */
     suspend fun deleteWithComponents(context: Context, id: String, options: DeleteOptions) {
+        // 内置默认主题不可删除
+        if (id == builtinThemeId) return
         val config = load().firstOrNull { it.id == id }
 
         // 删除关联的日间主题配置
@@ -519,9 +577,10 @@ object ApplicationThemeManager {
         }
 
         // 删除关联的日间顶栏配置
-        if (options.deleteDayTopBar && config != null
-            && config.dayTopBarDir.isNotBlank()
-            && config.dayTopBarDir != TopBarConfig.DEFAULT_DIR_NAME
+        if (options.deleteDayTopBar &&
+            config != null &&
+            config.dayTopBarDir.isNotBlank() &&
+            config.dayTopBarDir != TopBarConfig.DEFAULT_DIR_NAME
         ) {
             val entry = TopBarConfig.loadEntries(context, false)
                 .firstOrNull { it.dirName == config.dayTopBarDir }
@@ -529,9 +588,10 @@ object ApplicationThemeManager {
         }
 
         // 删除关联的夜间顶栏配置
-        if (options.deleteNightTopBar && config != null
-            && config.nightTopBarDir.isNotBlank()
-            && config.nightTopBarDir != TopBarConfig.DEFAULT_DIR_NAME
+        if (options.deleteNightTopBar &&
+            config != null &&
+            config.nightTopBarDir.isNotBlank() &&
+            config.nightTopBarDir != TopBarConfig.DEFAULT_DIR_NAME
         ) {
             val entry = TopBarConfig.loadEntries(context, true)
                 .firstOrNull { it.dirName == config.nightTopBarDir }
@@ -588,8 +648,9 @@ object ApplicationThemeManager {
         applyBottomBar(context, true, config.nightBottomBarId)
 
         val coverRepository = CoverGalleryRepository()
-        config.dayCoverGroupId?.let { coverRepository.setSelectedGroup(false, it) }
-        config.nightCoverGroupId?.let { coverRepository.setSelectedGroup(true, it) }
+        // 封面图集为 null 表示「未设置」，应用时重置为默认（不使用图集），而非保持现状
+        coverRepository.setSelectedGroup(false, config.dayCoverGroupId)
+        coverRepository.setSelectedGroup(true, config.nightCoverGroupId)
 
         if (config.dayTheme != null && context.getPrefString(PreferKey.dThemeName) != config.dayTheme?.themeName) {
             throw IllegalStateException(appCtx.getString(R.string.app_theme_day_apply_failed))
@@ -620,11 +681,12 @@ object ApplicationThemeManager {
         return appCtx.getString(R.string.app_theme_summary_format, dayTheme, dayTop, dayBottom, dayCover, nightTheme, nightTop, nightBottom, nightCover)
     }
 
-    /** 安全保存配置列表：先写临时文件再原子替换，并备份原文件 */
+    /** 安全保存配置列表：先写临时文件再原子替换，并备份原文件；内置默认主题由代码生成，不落盘 */
     private fun save(items: List<Config>) {
+        val persisted = items.filterNot { it.id == builtinThemeId }
         val target = FileUtils.createFileIfNotExist(filePath)
         val temp = File("$filePath.tmp")
-        temp.writeText(GSON.toJson(items))
+        temp.writeText(GSON.toJson(persisted))
         if (target.exists()) target.copyTo(File("$filePath.bak"), overwrite = true)
         if (!temp.renameTo(target)) {
             temp.copyTo(target, overwrite = true)
@@ -643,23 +705,17 @@ object ApplicationThemeManager {
             ?.let { NavigationBarConfig.setActiveId(context, isNight, it.id) }
     }
 
-    private fun topBarName(context: Context, isNight: Boolean, dirName: String): String {
-        return TopBarConfig.loadEntries(context, isNight)
-            .firstOrNull { it.dirName == dirName }?.config?.name
-            ?: context.getString(io.legado.app.R.string.application_theme_not_set)
-    }
+    private fun topBarName(context: Context, isNight: Boolean, dirName: String): String = TopBarConfig.loadEntries(context, isNight)
+        .firstOrNull { it.dirName == dirName }?.config?.name
+        ?: context.getString(io.legado.app.R.string.application_theme_not_set)
 
-    private fun bottomBarName(context: Context, isNight: Boolean, id: String?): String {
-        return NavigationBarConfig.loadConfigs(context)
-            .firstOrNull { it.isNight == isNight && it.id == id }?.name
-            ?: context.getString(io.legado.app.R.string.application_theme_not_set)
-    }
+    private fun bottomBarName(context: Context, isNight: Boolean, id: String?): String = NavigationBarConfig.loadConfigs(context)
+        .firstOrNull { it.isNight == isNight && it.id == id }?.name
+        ?: context.getString(io.legado.app.R.string.application_theme_not_set)
 
-    private fun selectedCoverGroupId(context: Context, isNight: Boolean): Long? {
-        return context.getPrefString(
-            if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay
-        )?.toLongOrNull()
-    }
+    private fun selectedCoverGroupId(context: Context, isNight: Boolean): Long? = context.getPrefString(
+        if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay,
+    )?.toLongOrNull()
 
     private fun packageTheme(zip: ZipOutputStream, theme: ThemeConfig.Config?, prefix: String): ThemeConfig.Config? {
         theme ?: return null
@@ -678,7 +734,7 @@ object ApplicationThemeManager {
         context: Context,
         isNight: Boolean,
         dirName: String,
-        prefix: String
+        prefix: String,
     ): TopBarConfig.Config? {
         if (dirName.isBlank() || dirName == TopBarConfig.DEFAULT_DIR_NAME) return null
         val entry = TopBarConfig.loadEntries(context, isNight).firstOrNull { it.dirName == dirName } ?: return null
@@ -695,7 +751,7 @@ object ApplicationThemeManager {
         context: Context,
         isNight: Boolean,
         id: String?,
-        prefix: String
+        prefix: String,
     ): NavigationBarConfig? {
         val config = NavigationBarConfig.loadConfigs(context)
             .firstOrNull { it.isNight == isNight && it.id == id } ?: return null
@@ -728,7 +784,7 @@ object ApplicationThemeManager {
         temp: File,
         theme: ThemeConfig.Config?,
         isNight: Boolean,
-        registerTheme: Boolean = true
+        registerTheme: Boolean = true,
     ): ThemeConfig.Config? {
         theme ?: return null
         val path = theme.backgroundImgPath
@@ -757,7 +813,7 @@ object ApplicationThemeManager {
         temp: File,
         isNight: Boolean,
         originalDir: String,
-        packaged: TopBarConfig.Config?
+        packaged: TopBarConfig.Config?,
     ): String {
         if (originalDir.isBlank()) return ""
         if (originalDir == TopBarConfig.DEFAULT_DIR_NAME) return TopBarConfig.DEFAULT_DIR_NAME
@@ -768,7 +824,7 @@ object ApplicationThemeManager {
             .firstOrNull { it.config.name == source.name.trim() }
         return TopBarConfig.addOrUpdate(
             source.copy(isNightMode = isNight, wallpaperPath = wallpaper),
-            oldEntry = existingEntry
+            oldEntry = existingEntry,
         ).dirName
     }
 
@@ -776,7 +832,7 @@ object ApplicationThemeManager {
         zip: ZipFile,
         temp: File,
         isNight: Boolean,
-        packaged: NavigationBarConfig?
+        packaged: NavigationBarConfig?,
     ): String? {
         packaged ?: return null
         if (packaged.isBuiltin) {
@@ -790,7 +846,7 @@ object ApplicationThemeManager {
         val iconDir = appCtx.externalFiles.getFile("navigationBarIcons", id).apply { mkdirs() }
         val icons = packaged.icons.mapNotNull { (key, path) ->
             extractAsset(zip, temp, path)?.let { source ->
-                val target = iconDir.getFile("${key}.${source.extension.ifBlank { "png" }}")
+                val target = iconDir.getFile("$key.${source.extension.ifBlank { "png" }}")
                 source.copyTo(target, overwrite = true)
                 key to target.absolutePath
             }
@@ -924,7 +980,7 @@ object ApplicationThemeManager {
             nightBottomBarId = runCatching { source.nightBottomBarId }.getOrNull(),
             dayCoverGroupId = runCatching { source.dayCoverGroupId }.getOrNull(),
             nightCoverGroupId = runCatching { source.nightCoverGroupId }.getOrNull(),
-            updatedAt = runCatching { source.updatedAt }.getOrDefault(System.currentTimeMillis())
+            updatedAt = runCatching { source.updatedAt }.getOrDefault(System.currentTimeMillis()),
         )
     }
 }

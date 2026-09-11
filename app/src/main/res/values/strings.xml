@@ -204,6 +204,7 @@
     <string name="book_file_selector">Add books</string>
     <string name="scan_book_source">Scan</string>
     <string name="copy_source">Copy source</string>
+    <string name="paste">Paste</string>
     <string name="paste_source">Paste source</string>
     <string name="source_rule_s">Source rules description</string>
     <string name="check_update">Check for Updates</string>
@@ -406,7 +407,8 @@
     <string name="no_book_cache">No cached books</string>
     <string name="status_bar_immersion">The status bar color becomes transparent</string>
     <string name="imm_navigation_bar">immersion navigation bar</string>
-    <string name="imm_navigation_bar_s">Make the top bar transparent</string>
+    <string name="imm_navigation_bar_s">The navigation bar becomes transparent</string>
+    <string name="top_bar_transparent">Make the top bar transparent</string>
     <string name="top_bar_transparent_hint">Turning it off shows the top bar shadow; turning it on hides it</string>
     <string name="add_to_bookshelf">Add to Bookshelf</string>
     <string name="add_to_favorites">Add to Favorites</string>
@@ -677,6 +679,8 @@
     <string name="add_replace_rule">New replacement</string>
     <string name="group">Group</string>
     <string name="group_s">Group: %s</string>
+    <string name="book_tag_s">Tags: %s</string>
+    <string name="book_tag_existing">Existing tags</string>
     <string name="toc_s">Chapters: %s</string>
     <string name="enable_explore">Enable Discovery</string>
     <string name="disable_explore">Disable Discovery</string>
@@ -787,6 +791,8 @@
     <string name="add_to_text_context_menu_s">Long tap to display Legado·Search in the operation menu</string>
     <string name="add_to_text_context_menu_t">Text operation display Search</string>
     <string name="record_log">Record log</string>
+    <string name="debug_log">Debug log</string>
+    <string name="export_log">Export log</string>
     <string name="log">Log</string>
     <string name="chinese_converter">Simplified conversion</string>
     <string name="change_icon_error">The icon is a vector icon, which was not supported before Android 8.0</string>
@@ -890,6 +896,7 @@
     <string name="save_image">Save image</string>
     <string name="no_default_path">No default path</string>
     <string name="change_group">Group settings</string>
+    <string name="set_book_tag">Set Tags</string>
     <string name="view_toc">View Chapters</string>
     <string name="bar_elevation">Navigation bar shadow</string>
     <string name="bar_elevation_s">Current shadow size(elevation): %s</string>
@@ -1072,6 +1079,19 @@
     <string name="export_to_web_dav">Export to WebDav</string>
     <string name="reverse_content">Reverse content</string>
     <string name="debug">Debug</string>
+    <string name="source_used_api">Source Used API</string>
+    <string name="api_category_variable">Built-in Variables</string>
+    <string name="api_category_function">Built-in Functions</string>
+    <string name="api_category_source_method">Source Methods</string>
+    <string name="api_used">Used</string>
+    <string name="api_not_used">Not used</string>
+    <string name="api_no_usage">Not used in this source</string>
+    <string name="api_empty_list">No items</string>
+    <string name="api_copied">Copied "%1$s"</string>
+    <string name="api_copy_mode_enabled">Copy mode enabled</string>
+    <string name="api_copy_mode_disabled">Copy mode disabled</string>
+    <string name="api_usage_locations">Usage locations of "%1$s"</string>
+    <string name="api_source_not_found">Source not found</string>
     <string name="crash_log">Crash log</string>
     <string name="use_zh_layout">Custom Chinese line feed</string>
     <string name="image_style">Style of Images</string>
@@ -1651,6 +1671,7 @@
     <string name="more_settings">More Settings</string>
     <string name="show_read_record_in_book_info">Show Read Record</string>
     <string name="show_author_other_works_in_book_info">Show Author\'s Other Works</string>
+    <string name="show_book_tag_in_book_info">Show Tags</string>
     <string name="words">Words</string>
     <string name="app_name_sigma">Legado Max</string>
     <string name="about_description_sigma">\u3000\u3000Legado Max is inherited from Legado Sigma, aiming to improve and add features on the original version. Welcome to join us.</string>
@@ -1848,6 +1869,7 @@
     <string name="unknown_type">Unknown type</string>
 
     <!-- URL Record -->
+    <string name="url_record_count">Total %1$d records</string>
     <string name="url_record">URL Access Record</string>
     <string name="record_url_switch">Enable URL Recording</string>
     <string name="record_url_enabled">URL Recording Enabled</string>
@@ -1884,6 +1906,7 @@
     <string name="export_to_file">Export to File</string>
 
     <!-- Cover Gallery -->
+    <string name="import_zip">Import zip</string>
     <string name="cover_gallery">Cover Gallery</string>
     <string name="cover_gallery_summary">Manage group cover gallery, can be set as global default cover source</string>
 
@@ -2030,6 +2053,7 @@
     <!-- Show more info in list view -->
     <string name="show_more_info">Show More Info</string>
     <string name="show_intro">Show Intro</string>
+    <string name="show_bookshelf_read_progress">Show Reading Progress</string>
     <string name="show_category_info">Show Category Info, etc.</string>
     <string name="show_book_border">Show Border</string>
     <!-- Intro lines selection -->
@@ -2229,6 +2253,7 @@
     <string name="application_theme_import_with_options">Import app theme with options</string>
     <string name="application_theme_import_options_hint">Select components to create during import. Unchecked components will be skipped (not created).</string>
     <string name="application_theme_delete_options_hint">Check associated components to delete with "%1$s". Unchecked components will be kept.</string>
+    <string name="application_theme_builtin_name">Default theme</string>
     <string name="application_theme_manage">App themes</string>
     <string name="application_theme_name">App theme name</string>
     <string name="application_theme_name_exists">An app theme with this name already exists</string>

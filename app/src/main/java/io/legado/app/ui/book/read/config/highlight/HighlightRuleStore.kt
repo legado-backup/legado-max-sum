@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.read.config.highlight
 
 import android.content.Context
+import com.google.gson.JsonParser
 import io.legado.app.constant.PreferKey
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -48,15 +49,18 @@ object HighlightRuleStore {
         RegexCache.clear()
     }
 
-    fun defaultPresetRules(context: Context): List<HighlightRule> {
-        return createDefaultRules(context)
-    }
+    fun defaultPresetRules(context: Context): List<HighlightRule> = createDefaultRules(context)
 
     fun load(context: Context): MutableList<HighlightRule> {
         cachedRules?.let { return it.toMutableList() }
         val stored = context.getPrefString(PreferKey.highlightRuleItems)
         if (stored.isNullOrBlank()) {
             return mutableListOf()
+        }
+        // 混淆版本遗留数据：键名是 a/b 等混淆名，反序列化后正则等字段全为空，
+        // 表现为规则列表还在但怎么开关都不生效；数据不可恢复，重置为默认规则
+        if (isObfuscatedLegacyJson(stored)) {
+            return reset(context)
         }
         val rules = GSON.fromJsonArray<HighlightRule>(stored).getOrNull()?.toMutableList()
         if (rules != null) {
@@ -72,9 +76,7 @@ object HighlightRuleStore {
         return mutableListOf()
     }
 
-    fun loadEnabled(context: Context): List<HighlightRule> {
-        return load(context).filter { it.enabled && it.pattern.isNotBlank() }
-    }
+    fun loadEnabled(context: Context): List<HighlightRule> = load(context).filter { it.enabled && it.pattern.isNotBlank() }
 
     fun save(context: Context, rules: List<HighlightRule>) {
         val json = GSON.toJson(rules)
@@ -93,20 +95,18 @@ object HighlightRuleStore {
         return defaultRules.toMutableList()
     }
 
-    fun sanitizeRule(rule: HighlightRule, fallbackGroup: String = HighlightRuleGroupStore.DEFAULT_GROUP): HighlightRule {
-        return rule.copy(
-            name = rule.name.trim(),
-            pattern = rule.pattern.trim(),
-            sampleText = rule.sampleText.trim(),
-            group = rule.group.takeIf { it.isNotBlank() } ?: fallbackGroup,
-            scope = rule.scope?.trim()?.takeIf { it.isNotBlank() },
-            excludeScope = rule.excludeScope?.trim()?.takeIf { it.isNotBlank() },
-            layoutScope = rule.layoutScope?.trim()?.takeIf { it.isNotBlank() },
-            // GSON 用 Unsafe 实例化 data class 时不调用构造函数，
-            // 老规则 JSON 缺失 themeScope 字段时反序列化得到 0，应视为全部生效而非 coerceIn(1,3)=1（仅亮色）
-            themeScope = if (rule.themeScope in 1..3) rule.themeScope else HighlightRule.THEME_ALL,
-        )
-    }
+    fun sanitizeRule(rule: HighlightRule, fallbackGroup: String = HighlightRuleGroupStore.DEFAULT_GROUP): HighlightRule = rule.copy(
+        name = rule.name.trim(),
+        pattern = rule.pattern.trim(),
+        sampleText = rule.sampleText.trim(),
+        group = rule.group.takeIf { it.isNotBlank() } ?: fallbackGroup,
+        scope = rule.scope?.trim()?.takeIf { it.isNotBlank() },
+        excludeScope = rule.excludeScope?.trim()?.takeIf { it.isNotBlank() },
+        layoutScope = rule.layoutScope?.trim()?.takeIf { it.isNotBlank() },
+        // GSON 用 Unsafe 实例化 data class 时不调用构造函数，
+        // 老规则 JSON 缺失 themeScope 字段时反序列化得到 0，应视为全部生效而非 coerceIn(1,3)=1（仅亮色）
+        themeScope = if (rule.themeScope in 1..3) rule.themeScope else HighlightRule.THEME_ALL,
+    )
 
     fun backupData(context: Context): BackupData {
         val rules = load(context)
@@ -131,40 +131,49 @@ object HighlightRuleStore {
         backupData: BackupData,
         backupRootPath: String? = null,
     ) {
-        // 从备份目录恢复背景图文件，并更新规则中的 bgImage 路径
-        val restoredRules = if (backupRootPath != null) {
-            backupData.rules.map { rule ->
-                val restoredPath = HighlightRuleBackgroundManager.restoreFromBackup(
-                    context, backupRootPath, rule.bgImage
-                )
-                if (restoredPath != null && restoredPath != rule.bgImage) {
-                    rule.copy(bgImage = restoredPath)
-                } else {
-                    rule
+        // GSON 通过反射反序列化，混淆版本写出的旧备份键名对不上时，
+        // 非空类型字段实际会为 null，这里统一取可空值兜底，
+        // 否则恢复过程 NPE 被 Restore 的 runCatching 吞掉，高亮规则段静默跳过
+        val backupRules: List<HighlightRule>? = backupData.rules
+        val backupGroups: List<String>? = backupData.groups
+        val backupCurrentGroup: String? = backupData.currentGroup
+        if (backupRules != null) {
+            // 从备份目录恢复背景图文件，并更新规则中的 bgImage 路径
+            val restoredRules = if (backupRootPath != null) {
+                backupRules.map { rule ->
+                    val restoredPath = HighlightRuleBackgroundManager.restoreFromBackup(
+                        context,
+                        backupRootPath,
+                        rule.bgImage,
+                    )
+                    if (restoredPath != null && restoredPath != rule.bgImage) {
+                        rule.copy(bgImage = restoredPath)
+                    } else {
+                        rule
+                    }
                 }
+            } else {
+                backupRules
             }
-        } else {
-            backupData.rules
+            save(context, restoredRules)
+            // 三个旧开关跟随规则数据恢复：规则键缺失的损坏备份不误关开关
+            context.putPrefBoolean(PreferKey.highlightRuleDialog, backupData.dialogEnabled)
+            context.putPrefBoolean(PreferKey.highlightRuleBookTitle, backupData.bookTitleEnabled)
+            context.putPrefBoolean(PreferKey.highlightRuleBracketNote, backupData.bracketNoteEnabled)
         }
-        save(context, restoredRules)
-        HighlightRuleGroupStore.save(context, backupData.groups)
-        context.putPrefBoolean(PreferKey.highlightRuleDialog, backupData.dialogEnabled)
-        context.putPrefBoolean(PreferKey.highlightRuleBookTitle, backupData.bookTitleEnabled)
-        context.putPrefBoolean(PreferKey.highlightRuleBracketNote, backupData.bracketNoteEnabled)
+        if (backupGroups != null) {
+            HighlightRuleGroupStore.save(context, backupGroups)
+        }
         val groups = HighlightRuleGroupStore.load(context)
         context.putPrefString(
             PreferKey.highlightRuleCurrentGroup,
-            backupData.currentGroup.takeIf { groups.contains(it) } ?: ""
+            backupCurrentGroup?.takeIf { groups.contains(it) }.orEmpty(),
         )
     }
 
-    fun getUsedBgImageFiles(context: Context): List<File> {
-        return HighlightRuleBackgroundManager.getUsedFiles(context, load(context))
-    }
+    fun getUsedBgImageFiles(context: Context): List<File> = HighlightRuleBackgroundManager.getUsedFiles(context, load(context))
 
-    private fun createDefaultRules(context: Context): List<HighlightRule> {
-        return HighlightRuleDefaultRules.create(context)
-    }
+    private fun createDefaultRules(context: Context): List<HighlightRule> = HighlightRuleDefaultRules.create(context)
 
     private fun normalizeRules(
         rules: List<HighlightRule>,
@@ -210,10 +219,10 @@ object HighlightRuleStore {
         // 不再因"无样式"而刷新——用户可能故意清除内置规则的样式
         val inspectText = rule.name + rule.pattern + rule.sampleText
         return rule.name.isBlank() ||
-                rule.pattern.isBlank() ||
-                garbledMarkers.any { inspectText.contains(it) } ||
-                legacyBuiltinPatterns[rule.id] == rule.pattern ||
-                legacyBuiltinSampleTexts[rule.id] == rule.sampleText
+            rule.pattern.isBlank() ||
+            garbledMarkers.any { inspectText.contains(it) } ||
+            legacyBuiltinPatterns[rule.id] == rule.pattern ||
+            legacyBuiltinSampleTexts[rule.id] == rule.sampleText
     }
 
     /** 内置规则 ID 集合 */
@@ -229,7 +238,7 @@ object HighlightRuleStore {
         "ellipsis_default",
         "number_default",
         "english_default",
-        "date_time_default"
+        "date_time_default",
     )
 
     /**
@@ -250,7 +259,7 @@ object HighlightRuleStore {
         "ellipsis_default" to "x{2,}|\\*{2,}|\\.{2,}",
         "number_default" to "[0-9零一二三四五六七八九十百千万亿]+[元块美元英镑]|[0-9]+[%％]",
         "english_default" to "[a-zA-Z]{2,}[a-zA-Z0-9'-]*",
-        "date_time_default" to "[0-9零一二三四五六七八九十]+年[0-9零一二三四五六七八九十]+月[0-9零一二三四五六七八九十]*日?|[0-9]+点[0-9零一二三四五六七八九十]*分?"
+        "date_time_default" to "[0-9零一二三四五六七八九十]+年[0-9零一二三四五六七八九十]+月[0-9零一二三四五六七八九十]*日?|[0-9]+点[0-9零一二三四五六七八九十]*分?",
     )
 
     /** 乱码标记，用于检测旧数据编码问题 */
@@ -264,10 +273,35 @@ object HighlightRuleStore {
      * 主要用于修复重构时 \\n 被错误地当作字面字符而非换行符的问题。
      */
     private val legacyBuiltinSampleTexts = mapOf(
-        "poetry_default" to "床前明月光，\\n疑是地上霜。"
+        "poetry_default" to "床前明月光，\\n疑是地上霜。",
     )
 
-    private fun normalizeTargetScope(ruleScope: Int, builtinScope: Int): Int {
-        return if (ruleScope in 0..2) ruleScope else builtinScope
+    private fun normalizeTargetScope(ruleScope: Int, builtinScope: Int): Int = if (ruleScope in 0..2) ruleScope else builtinScope
+
+    /** HighlightRule 的规范字段名，用于识别混淆版本写出的损坏 JSON */
+    private val canonicalFieldNames = setOf(
+        "id", "name", "pattern", "isRegex", "sampleText", "group", "targetScope", "enabled",
+        "textColor", "underlineMode", "underlineColor", "underlineWidth", "underlineOffset",
+        "underlineSvgPath", "font", "bgColor", "bgImage", "bgImageFit", "bgImageScale",
+        "scope", "excludeScope", "layoutScope", "themeScope",
+    )
+
+    /**
+     * 检测是否为混淆版本遗留的损坏规则数据。
+     *
+     * 历史版本未 keep HighlightRule 字段名，release 包里 GSON 以 a/b 等混淆名写出到
+     * SharedPreferences；升级后这些键无法映射到当前字段。只要所有条目都不含任何
+     * 规范字段名，即判定为不可恢复的损坏数据（正常数据至少会有 id/name/pattern 键）。
+     */
+    private fun isObfuscatedLegacyJson(stored: String): Boolean {
+        return runCatching {
+            val element = JsonParser.parseString(stored)
+            if (!element.isJsonArray) return@runCatching false
+            val entries = element.asJsonArray
+            if (entries.isEmpty) return@runCatching false
+            entries.all { entry ->
+                !entry.isJsonObject || entry.asJsonObject.keySet().none { it in canonicalFieldNames }
+            }
+        }.getOrDefault(false)
     }
 }

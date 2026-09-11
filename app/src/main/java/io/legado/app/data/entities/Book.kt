@@ -27,13 +27,14 @@ import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
 import java.nio.charset.Charset
 import java.time.LocalDate
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 
 @Parcelize
 @TypeConverters(Book.Converters::class)
 @Entity(
     tableName = "books",
-    indices = [Index(value = ["name", "author"], unique = true)]
+    indices = [Index(value = ["name", "author"], unique = true)],
 )
 data class Book(
     // 详情页Url(本地书源存储完整文件路径)
@@ -46,7 +47,7 @@ data class Book(
     // 书源URL(默认BookType.local)
     @ColumnInfo(defaultValue = BookType.localTag)
     var origin: String = BookType.localTag,
-    //书源名称 or 本地书籍文件名
+    // 书源名称 or 本地书籍文件名
     @ColumnInfo(defaultValue = "")
     var originName: String = "",
     // 书籍名称(书源获取)
@@ -94,11 +95,11 @@ data class Book(
     // 当前章节索引
     @ColumnInfo(defaultValue = "0")
     var durChapterIndex: Int = 0,
-    @ColumnInfo(defaultValue = "0")
     /**  当前卷索引  **/
-    var durVolumeIndex: Int = 0,
     @ColumnInfo(defaultValue = "0")
+    var durVolumeIndex: Int = 0,
     /**  相对于卷的索引  **/
+    @ColumnInfo(defaultValue = "0")
     var chapterInVolumeIndex: Int = 0,
     // 当前阅读的进度(首行字符的索引位置)
     @ColumnInfo(defaultValue = "0")
@@ -106,7 +107,7 @@ data class Book(
     // 最近一次阅读书籍的时间(打开正文的时间)
     @ColumnInfo(defaultValue = "0")
     var durChapterTime: Long = System.currentTimeMillis(),
-    //字数
+    // 字数
     override var wordCount: String? = null,
     // 刷新书架时更新书籍信息
     @ColumnInfo(defaultValue = "1")
@@ -114,17 +115,18 @@ data class Book(
     // 手动排序
     @ColumnInfo(defaultValue = "0")
     var order: Int = 0,
-    //书源排序
+    // 书源排序
     @ColumnInfo(defaultValue = "0")
     var originOrder: Int = 0,
     // 自定义书籍变量信息(用于书源规则检索书籍信息)
     override var variable: String? = null,
-    //阅读设置
+    // 阅读设置
     var readConfig: ReadConfig? = null,
-    //同步时间
+    // 同步时间
     @ColumnInfo(defaultValue = "0")
-    var syncTime: Long = 0L
-) : Parcelable, BaseBook {
+    var syncTime: Long = 0L,
+) : Parcelable,
+    BaseBook {
 
     override fun equals(other: Any?): Boolean {
         if (other is Book) {
@@ -133,15 +135,13 @@ data class Book(
         return false
     }
 
-    override fun hashCode(): Int {
-        return bookUrl.hashCode()
-    }
+    override fun hashCode(): Int = bookUrl.hashCode()
 
     @delegate:Transient
     @delegate:Ignore
     @IgnoredOnParcel
-    override val variableMap: HashMap<String, String> by lazy {
-        GSON.fromJsonObject<HashMap<String, String>>(variable).getOrNull() ?: hashMapOf()
+    override val variableMap: ConcurrentHashMap<String, String> by lazy {
+        ConcurrentHashMap(GSON.fromJsonObject<Map<String, String>>(variable).getOrNull() ?: emptyMap())
     }
 
     @Ignore
@@ -193,15 +193,13 @@ data class Book(
         }
     }
 
-    //自定义简介有自动更新的需求时，可通过更新intro再调用upCustomIntro()完成
+    // 自定义简介有自动更新的需求时，可通过更新intro再调用upCustomIntro()完成
     @Suppress("unused")
     fun upCustomIntro() {
         customIntro = intro
     }
 
-    fun fileCharset(): Charset {
-        return charset(charset ?: "UTF-8")
-    }
+    fun fileCharset(): Charset = charset(charset ?: "UTF-8")
 
     @IgnoredOnParcel
     val config: ReadConfig
@@ -216,9 +214,7 @@ data class Book(
         config.reverseToc = reverseToc
     }
 
-    fun getReverseToc(): Boolean {
-        return config.reverseToc
-    }
+    fun getReverseToc(): Boolean = config.reverseToc
 
     fun setUseReplaceRule(useReplaceRule: Boolean) {
         config.useReplaceRule = useReplaceRule
@@ -229,7 +225,7 @@ data class Book(
         if (useReplaceRule != null) {
             return useReplaceRule
         }
-        //图片类书源 epub本地 默认关闭净化
+        // 图片类书源 epub本地 默认关闭净化
         if (isImage || isEpub) {
             return false
         }
@@ -240,9 +236,7 @@ data class Book(
         config.reSegment = reSegment
     }
 
-    fun getReSegment(): Boolean {
-        return config.reSegment
-    }
+    fun getReSegment(): Boolean = config.reSegment
 
     fun setPageAnim(pageAnim: Int?) {
         config.pageAnim = pageAnim
@@ -261,34 +255,26 @@ data class Book(
         config.imageStyle = imageStyle
     }
 
-    fun getImageStyle(): String? {
-        return config.imageStyle
-    }
+    fun getImageStyle(): String? = config.imageStyle
 
     fun setTtsEngine(ttsEngine: String?) {
         config.ttsEngine = ttsEngine
     }
 
-    fun getTtsEngine(): String? {
-        return config.ttsEngine
-    }
+    fun getTtsEngine(): String? = config.ttsEngine
 
     fun setSplitLongChapter(limitLongContent: Boolean) {
         config.splitLongChapter = limitLongContent
     }
 
-    fun getSplitLongChapter(): Boolean {
-        return config.splitLongChapter
-    }
+    fun getSplitLongChapter(): Boolean = config.splitLongChapter
 
     // readSimulating 的 setter 和 getter
     fun setReadSimulating(readSimulating: Boolean) {
         config.readSimulating = readSimulating
     }
 
-    fun getReadSimulating(): Boolean {
-        return config.readSimulating
-    }
+    fun getReadSimulating(): Boolean = config.readSimulating
 
     // startDate 的 setter 和 getter
     fun setStartDate(startDate: LocalDate?) {
@@ -317,48 +303,37 @@ data class Book(
         config.dailyChapters = dailyChapters
     }
 
-    fun getDailyChapters(): Int {
-        return config.dailyChapters
-    }
+    fun getDailyChapters(): Int = config.dailyChapters
 
     // 片头 的 setter 和 getter
     fun setOpenCredits(openCredits: Int) {
         config.openCredits = openCredits
     }
 
-    fun getOpenCredits(): Int {
-        return config.openCredits
-    }
+    fun getOpenCredits(): Int = config.openCredits
+
     // 片尾 的 setter 和 getter
     fun setCloseCredits(closeCredits: Int) {
         config.closeCredits = closeCredits
     }
 
-    fun getCloseCredits(): Int {
-        return config.closeCredits
-    }
+    fun getCloseCredits(): Int = config.closeCredits
 
     // 播放模式 的 setter 和 getter
     fun setPlayMode(playMode: Int) {
         config.playMode = playMode
     }
 
-    fun getPlayMode(): Int {
-        return config.playMode
-    }
+    fun getPlayMode(): Int = config.playMode
 
     // 播放速度 的 setter 和 getter
     fun setPlaySpeed(playSpeed: Float) {
         config.playSpeed = playSpeed
     }
 
-    fun getPlaySpeed(): Float {
-        return config.playSpeed
-    }
+    fun getPlaySpeed(): Float = config.playSpeed
 
-    fun getDelTag(tag: Long): Boolean {
-        return config.delTag and tag == tag
-    }
+    fun getDelTag(tag: Long): Boolean = config.delTag and tag == tag
 
     fun addDelTag(tag: Long) {
         config.delTag = config.delTag or tag
@@ -372,7 +347,7 @@ data class Book(
         folderName?.let {
             return it
         }
-        //防止书名过长,只取9位
+        // 防止书名过长,只取9位
         folderName = getFolderNameNoCache()
         return folderName!!
     }
@@ -391,7 +366,7 @@ data class Book(
         intro = intro,
         tocUrl = tocUrl,
         originOrder = originOrder,
-        variable = variable
+        variable = variable,
     ).apply {
         this.infoHtml = this@Book.infoHtml
         this.tocHtml = this@Book.tocHtml
@@ -410,7 +385,7 @@ data class Book(
         coverUrl = coverUrl,
         intro = intro,
         tocUrl = tocUrl,
-        originOrder = originOrder
+        originOrder = originOrder,
     )
 
     /**
@@ -423,7 +398,7 @@ data class Book(
             newBook.durChapterTitle = toc[newBook.durChapterIndex].getDisplayTitle(
                 ContentProcessor.get(newBook.name, newBook.origin).getTitleReplaceRules(),
                 getUseReplaceRule(),
-                replaceBook = toReplaceBook()
+                replaceBook = toReplaceBook(),
             )
             newBook.durChapterPos = durChapterPos
         }
@@ -438,12 +413,10 @@ data class Book(
         return newBook
     }
 
-    fun createBookMark(): Bookmark {
-        return Bookmark(
-            bookName = name,
-            bookAuthor = author,
-        )
-    }
+    fun createBookMark(): Bookmark = Bookmark(
+        bookName = name,
+        bookAuthor = author,
+    )
 
     fun save() {
         if (appDb.bookDao.has(bookUrl)) {
@@ -476,18 +449,18 @@ data class Book(
         var pageAnim: Int? = null,
         var reSegment: Boolean = false,
         var imageStyle: String? = null,
-        var useReplaceRule: Boolean? = null,// 正文使用净化替换规则
-        var delTag: Long = 0L,//去除标签
+        var useReplaceRule: Boolean? = null, // 正文使用净化替换规则
+        var delTag: Long = 0L, // 去除标签
         var ttsEngine: String? = null,
         var splitLongChapter: Boolean = false,
         var readSimulating: Boolean = false,
         var startDate: LocalDate? = null,
-        var startChapter: Int? = null,     // 用户设置的起始章节
-        var dailyChapters: Int = 3,    // 用户设置的每日更新章节数
-        var openCredits: Int = 0,       //音频片头
-        var closeCredits: Int = 0,       //音频片尾
-        var playMode: Int = 0,           //音频播放模式
-        var playSpeed: Float = 1.0f      //音频播放速度
+        var startChapter: Int? = null, // 用户设置的起始章节
+        var dailyChapters: Int = 3, // 用户设置的每日更新章节数
+        var openCredits: Int = 0, // 音频片头
+        var closeCredits: Int = 0, // 音频片尾
+        var playMode: Int = 0, // 音频播放模式
+        var playSpeed: Float = 1.0f, // 音频播放速度
     ) : Parcelable
 
     class Converters {

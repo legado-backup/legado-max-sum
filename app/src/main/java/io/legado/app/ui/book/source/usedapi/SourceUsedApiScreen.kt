@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
@@ -59,7 +60,7 @@ import io.legado.app.utils.toastOnUi
  * 展示一个书源用到的内置 API：
  * - 顶部 Tab 切换「已使用 / 未使用」，Tab 标签带数量统计
  * - 列表按分类分组，保留分类标题；命中的条目带对勾与强调色
- * - 点击条目复制 API 名称
+ * - 顶栏开启复制模式后，点击条目复制 API 名称
  *
  * @param uiState 界面状态
  * @param onBackClick 返回按钮回调
@@ -75,6 +76,8 @@ fun SourceUsedApiScreen(
     val secondaryTextColor = pageSecondaryTextColor()
     var searchKey by rememberSaveable { mutableStateOf("") }
     var searchVisible by rememberSaveable { mutableStateOf(false) }
+    // 复制模式：开启后点击列表条目才复制名称，图标高亮提示
+    var copyMode by rememberSaveable { mutableStateOf(false) }
     val onCopyName: (String) -> Unit = { name ->
         context.sendToClip(name)
         context.toastOnUi(context.getString(R.string.api_copied, name))
@@ -87,6 +90,17 @@ fun SourceUsedApiScreen(
                 subtitle = (uiState as? SourceUsedApiUiState.Ready)?.sourceName,
                 onBackClick = onBackClick,
                 actions = {
+                    IconButton(onClick = { copyMode = !copyMode }) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = stringResource(R.string.copy),
+                            tint = if (copyMode) {
+                                accentColor
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                     IconButton(onClick = {
                         if (searchVisible || searchKey.isNotEmpty()) {
                             searchKey = ""
@@ -135,6 +149,7 @@ fun SourceUsedApiScreen(
                     searchKey = searchKey,
                     onSearchKeyChange = { searchKey = it },
                     showSearchField = searchVisible || searchKey.isNotEmpty(),
+                    copyModeEnabled = copyMode,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -157,6 +172,7 @@ private fun ApiCatalogContent(
     searchKey: String,
     onSearchKeyChange: (String) -> Unit,
     showSearchField: Boolean,
+    copyModeEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     var showingUsed by rememberSaveable { mutableStateOf(true) }
@@ -252,7 +268,11 @@ private fun ApiCatalogContent(
                                 item = item,
                                 accentColor = accentColor,
                                 secondaryTextColor = secondaryTextColor,
-                                onClick = { onCopyName(item.name) }
+                                onClick = {
+                                    if (copyModeEnabled) {
+                                        onCopyName(item.name)
+                                    }
+                                }
                             )
                         }
                     }

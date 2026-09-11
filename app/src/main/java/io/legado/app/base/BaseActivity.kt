@@ -210,6 +210,20 @@ abstract class BaseActivity<VB : ViewBinding>(
 
     open fun upBackgroundImage() {
         if (imageBg) {
+            val signature = ThemeConfig.getBackgroundSignature(this)
+            // 命中进程级缓存：同步应用，Activity 重建/返回主界面时无需重新解码，无闪烁
+            val cached = ThemeConfig.getCachedBgImage(signature)
+            if (cached != null) {
+                onBackgroundDrawableLoaded(cached)
+                return
+            }
+            // 未命中缓存：先用最近一次应用的背景图占位（如有），
+            // 避免异步解码期间先显示纯色底再跳变成背景图
+            var placeholderApplied = false
+            ThemeConfig.getLastBgImage(signature)?.let {
+                onBackgroundDrawableLoaded(it)
+                placeholderApplied = true
+            }
             val windowSize = windowManager.windowSize
             lifecycleScope.launch(Dispatchers.Default) {
                 val drawable = try {
@@ -223,7 +237,14 @@ abstract class BaseActivity<VB : ViewBinding>(
                 }
                 withContext(Dispatchers.Main) {
                     if (!isFinishing && !isDestroyed) {
-                        onBackgroundDrawableLoaded(drawable)
+                        if (drawable != null) {
+                            ThemeConfig.cacheBgImage(signature, drawable)
+                            onBackgroundDrawableLoaded(drawable)
+                        } else if (!placeholderApplied) {
+                            // 加载失败且无占位时才通知空背景（清除旧背景），
+                            // 有占位时保留占位图，避免闪回纯色
+                            onBackgroundDrawableLoaded(null)
+                        }
                     }
                 }
             }

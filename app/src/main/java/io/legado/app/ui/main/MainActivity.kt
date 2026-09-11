@@ -85,11 +85,8 @@ import io.legado.app.utils.visible
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.DevicePerformanceUtils
 import io.legado.app.utils.dpToPx
-import io.legado.app.utils.externalFiles
-import io.legado.app.utils.FileUtils
 import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.getPrefInt
-import io.legado.app.utils.getPrefString
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -99,7 +96,6 @@ import kotlin.coroutines.resume
 import androidx.core.graphics.drawable.toDrawable
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.ui.about.UpdateDialog
-import java.io.File
 import io.legado.app.utils.StringUtils
 import io.legado.app.utils.clearClip
 import io.legado.app.utils.getClipText
@@ -209,33 +205,10 @@ class MainActivity :
     }
 
     /**
-     * 计算当前主题背景的签名，取图逻辑与 [ThemeConfig.getBgImage] 保持一致。
-     * 纳入主题模式（日/夜）、背景路径、文件最后修改时间与大小、模糊强度，
-     * 任一变化都会使签名不同而触发重新解码。
+     * 计算当前主题背景的签名，统一委托 [ThemeConfig.getBackgroundSignature]，
+     * 与 BaseActivity 的进程级背景缓存使用同一口径。
      */
-    private fun currentBackgroundSignature(): String? {
-        val night = AppConfig.isNightTheme
-        val prefKey = if (night) PreferKey.bgImageN else PreferKey.bgImage
-        val rawPath = getPrefString(prefKey).orEmpty()
-        if (rawPath.isBlank()) return "bg:$prefKey:empty"
-        // 与 getBgImage 相同：在线背景需先落到缓存文件，仅文件名的需拼接完整路径
-        val path = if (rawPath.startsWith("http")) {
-            val filePath = FileUtils.getPath(externalFiles, prefKey, ThemeConfig.getUrlToFile(rawPath))
-            if (FileUtils.exist(filePath)) filePath else null
-        } else if (!rawPath.contains(File.separator)) {
-            val filePath = FileUtils.getPath(externalFiles, prefKey, rawPath)
-            if (FileUtils.exist(filePath)) filePath else null
-        } else {
-            rawPath
-        }
-        if (path == null) return "bg:$prefKey:missing:$rawPath"
-        val blurring = getPrefInt(
-            if (night) PreferKey.bgImageNBlurring else PreferKey.bgImageBlurring,
-            0,
-        )
-        val file = File(path)
-        return "bg:$prefKey:${file.absolutePath}:${file.lastModified()}:${file.length()}:$blurring"
-    }
+    private fun currentBackgroundSignature(): String = ThemeConfig.getBackgroundSignature(this)
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         // 清理已销毁 Fragment 的引用，避免 fragmentMap 持有导致内存泄漏

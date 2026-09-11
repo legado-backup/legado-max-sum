@@ -6,6 +6,7 @@ import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
+import android.util.LruCache
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.graphics.toColorInt
@@ -176,6 +177,59 @@ object ThemeConfig {
         }
         return bgImage?.stackBlur(bgImgBlu)?.toDrawable(context.resources)
     }
+
+    // ==================== 背景图进程级缓存（消除重建时的纯色闪烁） ====================
+
+    /** 背景图签名 → 解码结果缓存。整屏 ARGB 位图约 10MB/张，最多保留 2 张（当前 + 上一张切换占位） */
+    private val bgDrawableCache = object : LruCache<String, Drawable>(2) {}
+
+    /** 最近一次成功解码的背景图（签名 + Drawable），未命中缓存时用作解码期间的占位 */
+    @Volatile
+    private var lastBgImage: Pair<String, Drawable>? = null
+
+    /**
+     * 计算当前主题背景的签名，取图逻辑与 [getBgImage] 保持一致。
+     * 纳入主题模式（日/夜）、背景路径、文件最后修改时间与大小、模糊强度，
+     * 任一变化都会使签名不同而触发重新解码。无背景图配置时返回非空标识（缓存键仍有效）。
+     */
+    fun getBackgroundSignature(context: Context): String {
+        val night = AppConfig.isNightTheme
+        val prefKey = if (night) PreferKey.bgImageN else PreferKey.bgImage
+        val rawPath = context.getPrefString(prefKey).orEmpty()
+        if (rawPath.isBlank()) return "bg:$prefKey:empty"
+        // 与 getBgImage 相同：在线背景需先落到缓存文件，仅文件名的需拼接完整路径
+        val path = if (rawPath.startsWith("http")) {
+            val filePath = FileUtils.getPath(context.externalFiles, prefKey, getUrlToFile(rawPath))
+            filePath.takeIf { FileUtils.exist(it) }
+        } else if (!rawPath.contains(File.separator)) {
+            val filePath = FileUtils.getPath(context.externalFiles, prefKey, rawPath)
+            filePath.takeIf { FileUtils.exist(it) }
+        } else {
+            rawPath
+        }
+        if (path == null) return "bg:$prefKey:missing:$rawPath"
+        val blurring = context.getPrefInt(
+            if (night) PreferKey.bgImageNBlurring else PreferKey.bgImageBlurring,
+            0,
+        )
+        val file = File(path)
+        return "bg:$prefKey:${file.absolutePath}:${file.lastModified()}:${file.length()}:$blurring"
+    }
+
+    /** 命中缓存返回独立副本（mutate），避免多窗口共享同一 Drawable 实例导致状态冲突 */
+    fun getCachedBgImage(signature: String): Drawable? =
+        bgDrawableCache.get(signature)?.constantState?.newDrawable()?.mutate()
+
+    /** 缓存解码结果 */
+    fun cacheBgImage(signature: String, drawable: Drawable) {
+        bgDrawableCache.put(signature, drawable)
+        lastBgImage = signature to drawable
+    }
+
+    /** 最近一次应用的背景图（排除指定签名），供未命中缓存时作占位，返回独立副本 */
+    fun getLastBgImage(excludeSignature: String): Drawable? =
+        lastBgImage?.takeIf { it.first != excludeSignature }
+            ?.second?.constantState?.newDrawable()?.mutate()
 
     suspend fun upConfig() {
         addConfigs(DefaultData.themeConfigs)

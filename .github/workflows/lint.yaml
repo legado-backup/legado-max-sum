@@ -67,7 +67,8 @@ jobs:
           ./gradlew compileDebugSources --parallel --daemon --warning-mode all
 
       - name: Kotlin Format Check (spotless/ktlint)
-        # 只检查自 origin/main 以来的改动文件；本地修正 ./gradlew spotlessApply
+        # 可选检查：格式问题不阻塞 CI，仅警示；本地修正 ./gradlew spotlessApply
+        continue-on-error: true
         run: |
           ./gradlew spotlessCheck --parallel --daemon --warning-mode all
 

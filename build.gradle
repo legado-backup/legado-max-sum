@@ -50,6 +50,7 @@ spotless {
             'ktlint_standard_no-consecutive-comments': 'disabled',  // 注释块与语句之间加空行
             'ktlint_standard_if-else-wrapping': 'disabled',         // if/else 分支内的注释位置
             'ktlint_standard_import-ordering': 'disabled',          // 存量不按字母序导入，强制排序会使每次提交 diff 大量噪音
+            'ktlint_standard_no-wildcard-imports': 'disabled',      // Compose 包级导入（foundation.layout.*/material3.*）是项目惯例且不可自动修复
             'max_line_length': 'off',                               // 存量存在超长行，先放开行宽检查
         ])
         trimTrailingWhitespace()

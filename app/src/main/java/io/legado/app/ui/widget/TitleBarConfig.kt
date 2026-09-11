@@ -17,6 +17,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.util.StateSet
 import android.view.View
 import androidx.core.content.ContextCompat
@@ -144,7 +145,13 @@ private fun Drawable?.resolveSolidColor(): Int? {
     if (this == null) return null
     return when (this) {
         is ColorDrawable -> color
-        is GradientDrawable -> color?.defaultColor?.takeIf { it != Color.TRANSPARENT }
+        is GradientDrawable -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            color?.defaultColor?.takeIf { it != Color.TRANSPARENT }
+        } else {
+            // GradientDrawable.getColor() 为 API 24 新增，低版本无法读取纯色，
+            // 回退 null 让 topBarContentColor 走 getMenuColor 的默认取色
+            null
+        }
         is LayerDrawable -> {
             var resolved: Int? = null
             for (i in 0 until numberOfLayers) {

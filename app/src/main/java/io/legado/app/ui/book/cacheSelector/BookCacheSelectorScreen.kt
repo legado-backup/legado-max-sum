@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.R
 import io.legado.app.ui.book.cacheSelector.components.BookCacheItemCard
+import io.legado.app.ui.theme.pageAccentColor
 import io.legado.app.ui.theme.pageCardContainerColor
 import io.legado.app.ui.widget.components.AppPageTopBar
 import io.legado.app.ui.widget.components.AppScaffold
@@ -68,7 +69,7 @@ fun BookCacheSelectorScreen(
     var searchKey by rememberSaveable { mutableStateOf("") }
     var searchVisible by rememberSaveable { mutableStateOf(false) }
 
-    val accentColor = cacheSelectorAccentColor()
+    val accentColor = pageAccentColor()
     val visibleBookItems = bookItems.filter { item ->
         searchKey.isBlank() ||
                 item.book.name.contains(searchKey, ignoreCase = true) ||
@@ -130,7 +131,7 @@ fun BookCacheSelectorScreen(
                         enabled = selectedCount > 0,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = accentColor,
-                            contentColor = Color.White,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
                             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                         )
@@ -286,7 +287,7 @@ private fun SummaryBar(
     selectedCount: Int,
     totalSize: Long
 ) {
-    val accentColor = cacheSelectorAccentColor()
+    val accentColor = pageAccentColor()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
@@ -313,12 +314,6 @@ private fun SummaryBar(
             )
         }
     }
-}
-
-@Composable
-internal fun cacheSelectorAccentColor(): Color {
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.18f
-    return if (isDark) Color(0xFF5AB9A8) else Color(0xFF2F7D6B)
 }
 
 @Composable

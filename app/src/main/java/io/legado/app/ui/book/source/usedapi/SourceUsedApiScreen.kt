@@ -44,7 +44,6 @@ import io.legado.app.ui.theme.pageAccentColor
 import io.legado.app.ui.theme.pageSecondaryTextColor
 import io.legado.app.ui.widget.components.AppPageTopBar
 import io.legado.app.ui.widget.components.AppScaffold
-import io.legado.app.ui.widget.components.VerticalScrollbar
 import io.legado.app.ui.widget.components.navigationBarBottomInset
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.toastOnUi
@@ -55,7 +54,6 @@ import io.legado.app.utils.toastOnUi
  * 展示一个书源用到的内置 API：
  * - 顶部 Tab 切换「已使用 / 未使用」，Tab 标签带数量统计
  * - 列表按分类分组，保留分类标题；命中的条目带对勾与强调色
- * - 右侧可拖拽滚动条（[VerticalScrollbar]）
  * - 点击条目复制 API 名称
  *
  * @param uiState 界面状态
@@ -122,7 +120,7 @@ fun SourceUsedApiScreen(
 }
 
 /**
- * Tab 内容区：已使用/未使用切换，下方按分类展示 + 可拖拽滚动条。
+ * Tab 内容区：已使用/未使用切换，下方按分类展示（分类头可折叠）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -169,59 +167,55 @@ private fun ApiCatalogContent(
         LaunchedEffect(showingUsed) {
             listState.scrollToItem(0)
         }
-        Box(Modifier.fillMaxSize().weight(1f)) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = navigationBarBottomInset)
-            ) {
-                if (visibleCategories.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 64.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = stringResource(R.string.api_empty_list),
-                                color = secondaryTextColor
-                            )
-                        }
-                    }
-                } else {
-                    items(visibleCategories, key = { it.type.name }) { category ->
-                        val collapsed = category.type in collapsedTypes
-                        CategoryHeader(
-                            category = category,
-                            collapsed = collapsed,
-                            accentColor = accentColor,
-                            secondaryTextColor = secondaryTextColor,
-                            onToggle = {
-                                collapsedTypes = if (collapsed) {
-                                    collapsedTypes - category.type
-                                } else {
-                                    collapsedTypes + category.type
-                                }
-                            }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f),
+            contentPadding = PaddingValues(bottom = navigationBarBottomInset)
+        ) {
+            if (visibleCategories.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 64.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.api_empty_list),
+                            color = secondaryTextColor
                         )
-                        if (!collapsed) {
-                            category.items.forEach { item ->
-                                ApiItemRow(
-                                    item = item,
-                                    accentColor = accentColor,
-                                    secondaryTextColor = secondaryTextColor,
-                                    onClick = { onCopyName(item.name) }
-                                )
+                    }
+                }
+            } else {
+                items(visibleCategories, key = { it.type.name }) { category ->
+                    val collapsed = category.type in collapsedTypes
+                    CategoryHeader(
+                        category = category,
+                        collapsed = collapsed,
+                        accentColor = accentColor,
+                        secondaryTextColor = secondaryTextColor,
+                        onToggle = {
+                            collapsedTypes = if (collapsed) {
+                                collapsedTypes - category.type
+                            } else {
+                                collapsedTypes + category.type
                             }
+                        }
+                    )
+                    if (!collapsed) {
+                        category.items.forEach { item ->
+                            ApiItemRow(
+                                item = item,
+                                accentColor = accentColor,
+                                secondaryTextColor = secondaryTextColor,
+                                onClick = { onCopyName(item.name) }
+                            )
                         }
                     }
                 }
             }
-            VerticalScrollbar(
-                state = listState,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
         }
     }
 }

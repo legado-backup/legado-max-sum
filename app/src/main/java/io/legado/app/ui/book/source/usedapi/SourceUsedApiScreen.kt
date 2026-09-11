@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.source.usedapi
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,16 +10,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,8 +50,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import io.legado.app.R
+import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.theme.pageAccentColor
 import io.legado.app.ui.theme.pageSecondaryTextColor
 import io.legado.app.ui.widget.components.AppPageTopBar
@@ -70,6 +78,7 @@ import io.legado.app.utils.toastOnUi
 @Composable
 fun SourceUsedApiScreen(
     uiState: SourceUsedApiUiState,
+    sourceUrl: String,
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -153,6 +162,7 @@ fun SourceUsedApiScreen(
             is SourceUsedApiUiState.Ready -> {
                 ApiCatalogContent(
                     categories = state.categories,
+                    sourceUrl = sourceUrl,
                     accentColor = accentColor,
                     secondaryTextColor = secondaryTextColor,
                     onCopyName = onCopyName,
@@ -176,6 +186,7 @@ fun SourceUsedApiScreen(
 @Composable
 private fun ApiCatalogContent(
     categories: List<ApiCategory>,
+    sourceUrl: String,
     accentColor: Color,
     secondaryTextColor: Color,
     onCopyName: (String) -> Unit,
@@ -185,7 +196,10 @@ private fun ApiCatalogContent(
     copyModeEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var showingUsed by rememberSaveable { mutableStateOf(true) }
+    // 正在查看使用位置的条目（非复制模式点击后弹出）
+    var usageItem by remember { mutableStateOf<ApiItem?>(null) }
     // 折叠的分类（两个 Tab 共用，切换 Tab 不会重置）
     var collapsedTypes by remember { mutableStateOf(emptySet<ApiType>()) }
     val totalCount = categories.sumOf { it.items.size }
@@ -281,9 +295,103 @@ private fun ApiCatalogContent(
                                 onClick = {
                                     if (copyModeEnabled) {
                                         onCopyName(item.name)
+                                    } else if (item.locations.isNotEmpty()) {
+                                        usageItem = item
+                                    } else {
+                                        context.toastOnUi(R.string.api_no_usage)
                                     }
                                 }
                             )
+                        }
+                    }
+                }
+            }
+        }
+        // 非复制模式：展示使用位置弹窗，点击位置跳编辑器对应字段
+        usageItem?.let { item ->
+            ApiUsageLocationsDialog(
+                item = item,
+                accentColor = accentColor,
+                secondaryTextColor = secondaryTextColor,
+                onDismiss = { usageItem = null },
+                onLocate = { location ->
+                    usageItem = null
+                    context.startActivity(
+                        Intent(context, BookSourceEditActivity::class.java).apply {
+                            putExtra("sourceUrl", sourceUrl)
+                            putExtra("tabKey", location.tabKey)
+                            putExtra("fieldKey", location.fieldKey)
+                        }
+                    )
+                }
+            )
+        }
+    }
+}
+
+/**
+ * 「使用位置」弹窗：列出该 API 在书源中命中的全部字段及其代码片段。
+ * 点击某一行跳转到书源编辑器对应字段。
+ */
+@Composable
+private fun ApiUsageLocationsDialog(
+    item: ApiItem,
+    accentColor: Color,
+    secondaryTextColor: Color,
+    onDismiss: () -> Unit,
+    onLocate: (ApiUsageLocation) -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 4.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                Text(
+                    text = stringResource(R.string.api_usage_locations, item.name),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = accentColor,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                ) {
+                    items(item.locations, key = { it.tabKey + it.fieldKey + it.snippet.hashCode() }) { location ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = { onLocate(location) })
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "${location.tabKey}.${location.fieldKey}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = location.snippet,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = secondaryTextColor,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -293,7 +401,7 @@ private fun ApiCatalogContent(
 }
 
 /**
- * 分类标题行（可点击折叠 / 展开）：左侧分类名，右侧条目数与展开箭头。
+ * 分类标题行（可点击折叠 / 展开）：左侧分类名、右侧条目数与展开箭头。
  */
 @Composable
 private fun CategoryHeader(

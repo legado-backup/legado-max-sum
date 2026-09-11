@@ -30,6 +30,7 @@ class SourceUsedApiActivity : BaseComposeActivity() {
         }
         SourceUsedApiScreen(
             uiState = uiState,
+            sourceUrl = intent.getStringExtra("sourceUrl").orEmpty(),
             onBackClick = { finish() }
         )
     }

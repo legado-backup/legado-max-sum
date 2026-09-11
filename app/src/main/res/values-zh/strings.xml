@@ -1083,10 +1083,12 @@
     <string name="api_category_source_method">源对象方法</string>
     <string name="api_used">已使用</string>
     <string name="api_not_used">未使用</string>
+    <string name="api_no_usage">该API未在本源中使用</string>
     <string name="api_empty_list">暂无条目</string>
     <string name="api_copied">已复制「%1$s」</string>
     <string name="api_copy_mode_enabled">已开启复制模式</string>
     <string name="api_copy_mode_disabled">已关闭复制模式</string>
+    <string name="api_usage_locations">「%1$s」的使用位置</string>
     <string name="api_source_not_found">未找到该书源</string>
     <string name="crash_log">崩溃日志</string>
     <string name="use_zh_layout">使用自定义中文分行</string>

@@ -194,8 +194,18 @@ private fun ApiCatalogContent(
             )
         }
 
+        // 搜索框固定在 Tab 下方，不随列表滚动，点击搜索图标即可见
+        if (showSearchField) {
+            SourceUsedApiSearchField(
+                query = searchKey,
+                onQueryChange = onSearchKeyChange,
+                accentColor = accentColor
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
         val listState = rememberLazyListState()
-        // Tab 切换后回到列表顶部，避免残留在旧列表深处的滚动位置
+        // Tab 切换后回到列表顶部，避免在残留在旧列表深处的滚动位置
         LaunchedEffect(showingUsed) {
             listState.scrollToItem(0)
         }
@@ -206,16 +216,6 @@ private fun ApiCatalogContent(
                 .weight(1f),
             contentPadding = PaddingValues(bottom = navigationBarBottomInset)
         ) {
-            if (showSearchField) {
-                item {
-                    SourceUsedApiSearchField(
-                        query = searchKey,
-                        onQueryChange = onSearchKeyChange,
-                        accentColor = accentColor
-                    )
-                    Spacer(Modifier.height(4.dp))
-                }
-            }
             if (visibleCategories.isEmpty()) {
                 item {
                     Box(

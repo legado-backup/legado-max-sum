@@ -22,10 +22,6 @@
         android:title="@string/debug" />
 
     <item
-        android:id="@+id/menu_used_api"
-        android:title="@string/source_used_api" />
-
-    <item
         android:id="@+id/menu_del"
         android:title="@string/delete" />
 

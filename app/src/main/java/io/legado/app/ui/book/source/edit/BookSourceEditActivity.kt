@@ -36,6 +36,7 @@ import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
+import io.legado.app.ui.book.source.usedapi.SourceUsedApiActivity
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
@@ -396,6 +397,12 @@ class BookSourceEditActivity :
             R.id.menu_debug_source -> saveSource(getSource()) { source ->
                 startActivity<BookSourceDebugActivity> {
                     putExtra("key", source.bookSourceUrl)
+                }
+            }
+
+            R.id.menu_used_api -> saveSource(getSource()) { source ->
+                startActivity<SourceUsedApiActivity> {
+                    putExtra("sourceUrl", source.bookSourceUrl)
                 }
             }
 

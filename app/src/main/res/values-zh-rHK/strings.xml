@@ -905,6 +905,8 @@
     <string name="api_category_function">內建函數</string>
     <string name="api_category_source_method">源物件方法</string>
     <string name="api_used">已使用</string>
+    <string name="api_not_used">未使用</string>
+    <string name="api_empty_list">暫無條目</string>
     <string name="api_copied">已複製「%1$s」</string>
     <string name="api_source_not_found">找不到該書源</string>
     <string name="crash_log">崩潰日誌</string>

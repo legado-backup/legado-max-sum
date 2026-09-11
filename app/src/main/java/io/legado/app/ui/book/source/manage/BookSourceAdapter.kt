@@ -200,8 +200,6 @@ class BookSourceAdapter(
                 R.id.menu_search -> callBack.searchBook(source)
                 R.id.menu_debug_source -> callBack.debug(source)
 
-                R.id.menu_used_api -> callBack.showUsedApi(source)
-
                 R.id.menu_del -> {
                     callBack.del(source)
                     selected.remove(source)
@@ -383,7 +381,6 @@ class BookSourceAdapter(
         fun toBottom(bookSource: BookSourcePart)
         fun searchBook(bookSource: BookSourcePart)
         fun debug(bookSource: BookSourcePart)
-        fun showUsedApi(bookSource: BookSourcePart)
         fun upOrder(items: List<BookSourcePart>)
         fun enable(enable: Boolean, bookSource: BookSourcePart)
         fun enableExplore(enable: Boolean, bookSource: BookSourcePart)

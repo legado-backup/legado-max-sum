@@ -2,6 +2,7 @@ package io.legado.app.ui.book.source.usedapi
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,16 +13,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +41,7 @@ import io.legado.app.ui.theme.pageAccentColor
 import io.legado.app.ui.theme.pageSecondaryTextColor
 import io.legado.app.ui.widget.components.AppPageTopBar
 import io.legado.app.ui.widget.components.AppScaffold
+import io.legado.app.ui.widget.components.VerticalScrollbar
 import io.legado.app.ui.widget.components.navigationBarBottomInset
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.toastOnUi
@@ -38,9 +49,11 @@ import io.legado.app.utils.toastOnUi
 /**
  * 「源所用API」主界面。
  *
- * 展示一个书源用到的全部内置 API 目录，并按分类展示：
- * 命中的条目以对勾与强调色高亮并排前，未使用的置灰，
- * 点击条目复制 API 名称。
+ * 展示一个书源用到的内置 API：
+ * - 顶部 Tab 切换「已使用 / 未使用」，Tab 标签带数量统计
+ * - 列表按分类分组，保留分类标题；命中的条目带对勾与强调色
+ * - 右侧可拖拽滚动条（[VerticalScrollbar]）
+ * - 点击条目复制 API 名称
  *
  * @param uiState 界面状态
  * @param onBackClick 返回按钮回调
@@ -91,11 +104,88 @@ fun SourceUsedApiScreen(
             }
 
             is SourceUsedApiUiState.Ready -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
-                    contentPadding = PaddingValues(bottom = navigationBarBottomInset)
-                ) {
-                    items(state.categories, key = { it.type.name }) { category ->
+                ApiCatalogContent(
+                    categories = state.categories,
+                    accentColor = accentColor,
+                    secondaryTextColor = secondaryTextColor,
+                    onCopyName = onCopyName,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Tab 内容区：已使用/未使用切换，下方按分类展示 + 可拖拽滚动条。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ApiCatalogContent(
+    categories: List<ApiCategory>,
+    accentColor: Color,
+    secondaryTextColor: Color,
+    onCopyName: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showingUsed by rememberSaveable { mutableStateOf(true) }
+    val totalCount = categories.sumOf { it.items.size }
+    val usedCount = categories.sumOf { it.usedCount }
+
+    // 当前 Tab 下的分类（保留分类头，空分类跳过）
+    val visibleCategories = categories.mapNotNull { category ->
+        category.items.filter { it.used == showingUsed }
+            .takeIf { it.isNotEmpty() }
+            ?.let { category.copy(items = it) }
+    }
+
+    Column(modifier = modifier) {
+        SecondaryTabRow(selectedTabIndex = if (showingUsed) 0 else 1) {
+            Tab(
+                selected = showingUsed,
+                onClick = { showingUsed = true },
+                text = {
+                    Text("${stringResource(R.string.api_used)} ($usedCount)")
+                }
+            )
+            Tab(
+                selected = !showingUsed,
+                onClick = { showingUsed = false },
+                text = {
+                    Text("${stringResource(R.string.api_not_used)} (${totalCount - usedCount})")
+                }
+            )
+        }
+
+        val listState = rememberLazyListState()
+        // Tab 切换后回到列表顶部，避免残留在旧列表深处的滚动位置
+        LaunchedEffect(showingUsed) {
+            listState.scrollToItem(0)
+        }
+        Box(Modifier.fillMaxSize().weight(1f)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = navigationBarBottomInset)
+            ) {
+                if (visibleCategories.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 64.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.api_empty_list),
+                                color = secondaryTextColor
+                            )
+                        }
+                    }
+                } else {
+                    items(visibleCategories, key = { it.type.name }) { category ->
                         CategoryHeader(category, accentColor, secondaryTextColor)
                         category.items.forEach { item ->
                             ApiItemRow(
@@ -108,18 +198,22 @@ fun SourceUsedApiScreen(
                     }
                 }
             }
+            VerticalScrollbar(
+                state = listState,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
         }
     }
 }
 
 /**
- * 分类标题行：左侧分类名，右侧命中数（如 3/138）。
+ * 分类标题行：左侧分类名，右侧当前 Tab 下的条目数。
  */
 @Composable
 private fun CategoryHeader(
     category: ApiCategory,
-    accentColor: androidx.compose.ui.graphics.Color,
-    secondaryTextColor: androidx.compose.ui.graphics.Color
+    accentColor: Color,
+    secondaryTextColor: Color
 ) {
     Row(
         modifier = Modifier
@@ -141,7 +235,7 @@ private fun CategoryHeader(
         )
         Spacer(Modifier.weight(1f))
         Text(
-            text = "${category.usedCount}/${category.items.size}",
+            text = "${category.items.size}",
             style = MaterialTheme.typography.bodySmall,
             color = secondaryTextColor
         )
@@ -154,8 +248,8 @@ private fun CategoryHeader(
 @Composable
 private fun ApiItemRow(
     item: ApiItem,
-    accentColor: androidx.compose.ui.graphics.Color,
-    secondaryTextColor: androidx.compose.ui.graphics.Color,
+    accentColor: Color,
+    secondaryTextColor: Color,
     onClick: () -> Unit
 ) {
     Row(

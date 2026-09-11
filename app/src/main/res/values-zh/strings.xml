@@ -1082,6 +1082,8 @@
     <string name="api_category_function">内置函数</string>
     <string name="api_category_source_method">源对象方法</string>
     <string name="api_used">已使用</string>
+    <string name="api_not_used">未使用</string>
+    <string name="api_empty_list">暂无条目</string>
     <string name="api_copied">已复制「%1$s」</string>
     <string name="api_source_not_found">未找到该书源</string>
     <string name="crash_log">崩溃日志</string>

@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -131,6 +134,8 @@ private fun ApiCatalogContent(
     modifier: Modifier = Modifier
 ) {
     var showingUsed by rememberSaveable { mutableStateOf(true) }
+    // 折叠的分类（两个 Tab 共用，切换 Tab 不会重置）
+    var collapsedTypes by remember { mutableStateOf(emptySet<ApiType>()) }
     val totalCount = categories.sumOf { it.items.size }
     val usedCount = categories.sumOf { it.usedCount }
 
@@ -186,14 +191,29 @@ private fun ApiCatalogContent(
                     }
                 } else {
                     items(visibleCategories, key = { it.type.name }) { category ->
-                        CategoryHeader(category, accentColor, secondaryTextColor)
-                        category.items.forEach { item ->
-                            ApiItemRow(
-                                item = item,
-                                accentColor = accentColor,
-                                secondaryTextColor = secondaryTextColor,
-                                onClick = { onCopyName(item.name) }
-                            )
+                        val collapsed = category.type in collapsedTypes
+                        CategoryHeader(
+                            category = category,
+                            collapsed = collapsed,
+                            accentColor = accentColor,
+                            secondaryTextColor = secondaryTextColor,
+                            onToggle = {
+                                collapsedTypes = if (collapsed) {
+                                    collapsedTypes - category.type
+                                } else {
+                                    collapsedTypes + category.type
+                                }
+                            }
+                        )
+                        if (!collapsed) {
+                            category.items.forEach { item ->
+                                ApiItemRow(
+                                    item = item,
+                                    accentColor = accentColor,
+                                    secondaryTextColor = secondaryTextColor,
+                                    onClick = { onCopyName(item.name) }
+                                )
+                            }
                         }
                     }
                 }
@@ -207,17 +227,20 @@ private fun ApiCatalogContent(
 }
 
 /**
- * 分类标题行：左侧分类名，右侧当前 Tab 下的条目数。
+ * 分类标题行（可点击折叠/展开）：左侧分类名，右侧条目数与展开箭头。
  */
 @Composable
 private fun CategoryHeader(
     category: ApiCategory,
+    collapsed: Boolean,
     accentColor: Color,
-    secondaryTextColor: Color
+    secondaryTextColor: Color,
+    onToggle: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onToggle)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -238,6 +261,17 @@ private fun CategoryHeader(
             text = "${category.items.size}",
             style = MaterialTheme.typography.bodySmall,
             color = secondaryTextColor
+        )
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = if (collapsed) {
+                Icons.Filled.KeyboardArrowDown
+            } else {
+                Icons.Filled.KeyboardArrowUp
+            },
+            contentDescription = null,
+            tint = secondaryTextColor,
+            modifier = Modifier.size(18.dp)
         )
     }
 }

@@ -208,6 +208,12 @@ interface ReadRecordDao {
         words: Long
     ): ReadRecordSession?
 
+    @Query("SELECT DISTINCT deviceId, bookName, bookAuthor FROM readRecordSession")
+    suspend fun getDistinctSessionIdentities(): List<SessionIdentity>
+
+    @Query("DELETE FROM readRecordSession WHERE id IN (:ids)")
+    suspend fun deleteSessionsByIds(ids: List<Long>)
+
     @Query("DELETE FROM readRecordSession WHERE deviceId = :deviceId AND bookName = :bookName AND bookAuthor = :bookAuthor")
     suspend fun deleteSessionsByBook(deviceId: String, bookName: String, bookAuthor: String)
 
@@ -352,4 +358,13 @@ data class DailyReadStat(
     val date: String,
     val readCount: Int,
     val totalReadTime: Long
+)
+
+/**
+ * 会话表中按 (设备, 书名, 作者) 去重后的书籍标识（DISTINCT 查询 POJO）。
+ */
+data class SessionIdentity(
+    val deviceId: String,
+    val bookName: String,
+    val bookAuthor: String
 )

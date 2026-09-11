@@ -421,7 +421,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         backupJob?.cancel()
         needSyncReadAloudOnResume = BaseReadAloudService.isPlay() && isCurrentBookReadAloudBook()
         if (!BaseReadAloudService.isPlay()) {
-            ReadBook.upReadTime()
+            ReadBook.flushReadTime()
         }
         ReadBook.saveRead()
         ReadBook.cancelPreDownloadTask()

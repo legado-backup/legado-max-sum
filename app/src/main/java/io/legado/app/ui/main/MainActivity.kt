@@ -159,7 +159,7 @@ class MainActivity :
     }
 
     /**
-     * 重写背景更新方法，在父类设置 decorView 背景后，将相同背景同步到 content_container。
+     * 重写背景更新方法，在父类异步加载完成背景后，将相同背景同步到 content_container。
      *
      * 原因：底栏的玻璃/磨砂效果（[StableLiquidGlassView]）通过 [LiquidGlass] 采样
      * content_container 的像素来实现实时模糊。而 [LiquidGlass] 的采样机制是调用
@@ -179,8 +179,9 @@ class MainActivity :
      * 应改为在此处合并而非覆盖，或改用其他容器作为采样源。
      *
      * 其他注意点：
-     * - imageBg 关闭时 decorView 背景为 null，此处会将 content_container 背景同步为 null，
-     *   即清除其背景，不会遗留旧的背景图。
+     * - 背景图解码在子线程异步执行，回调 [onBackgroundDrawableLoaded] 在主线程触发后
+     *   才同步 content_container；decode 失败或无背景图配置时 drawable 为 null，
+     *   会将 content_container 背景同步为 null（清除背景，不遗留旧背景图）。
      * - mutate() 仅克隆 Drawable 状态对象，底层像素（bitmap/constantState）仍与 decorView
      *   共享，不会因双份背景导致像素内存翻倍，仅额外占用一份轻量状态对象。
      */
@@ -192,13 +193,18 @@ class MainActivity :
             return
         }
         backgroundImageSignature = signature
+        // 注意：背景解码是异步的，super 返回时背景尚未生效，
+        // content_container 的同步统一在 onBackgroundDrawableLoaded 回调中完成
         super.upBackgroundImage()
-        // 将 decorView 的当前背景同步到 content_container
+    }
+
+    override fun onBackgroundDrawableLoaded(drawable: Drawable?) {
+        super.onBackgroundDrawableLoaded(drawable)
+        // 将加载完成的背景同步到 content_container
         // 使用 constantState?.newDrawable()?.mutate() 创建独立副本，
         // 避免两个 View 共享同一 Drawable 状态导致绘制冲突
-        val decorBg = window.decorView.background
         // 注意：此处会无条件覆盖 content_container 背景，详见上方约束说明
-        binding.contentContainer.background = decorBg?.constantState?.newDrawable()?.mutate()
+        binding.contentContainer.background = drawable?.constantState?.newDrawable()?.mutate()
         backgroundImageApplied = true
     }
 

@@ -3,6 +3,7 @@ package io.legado.app.base
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.util.AttributeSet
@@ -222,10 +223,24 @@ abstract class BaseActivity<VB : ViewBinding>(
                 }
                 withContext(Dispatchers.Main) {
                     if (!isFinishing && !isDestroyed) {
-                        drawable?.let { window.decorView.background = it }
+                        onBackgroundDrawableLoaded(drawable)
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * 背景图异步解码完成回调（主线程）。
+     *
+     * [drawable] 为 null 表示无背景图配置或加载失败。
+     * 子类若需要在背景就绪后做同步处理（如同步到其他 View），
+     * 必须覆写本方法而非在 [upBackgroundImage] 调用后同步取值——
+     * 解码是异步的，[upBackgroundImage] 返回时背景尚未生效。
+     */
+    protected open fun onBackgroundDrawableLoaded(drawable: Drawable?) {
+        if (drawable != null) {
+            window.decorView.background = drawable
         }
     }
 

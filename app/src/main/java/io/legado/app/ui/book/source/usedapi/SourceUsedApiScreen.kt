@@ -91,7 +91,16 @@ fun SourceUsedApiScreen(
                 subtitle = (uiState as? SourceUsedApiUiState.Ready)?.sourceName,
                 onBackClick = onBackClick,
                 actions = {
-                    IconButton(onClick = { copyMode = !copyMode }) {
+                    IconButton(onClick = {
+                        copyMode = !copyMode
+                        context.toastOnUi(
+                            if (copyMode) {
+                                R.string.api_copy_mode_enabled
+                            } else {
+                                R.string.api_copy_mode_disabled
+                            }
+                        )
+                    }) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = stringResource(R.string.copy),

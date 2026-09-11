@@ -1087,6 +1087,8 @@
     <string name="api_not_used">Not used</string>
     <string name="api_empty_list">No items</string>
     <string name="api_copied">Copied "%1$s"</string>
+    <string name="api_copy_mode_enabled">Copy mode enabled</string>
+    <string name="api_copy_mode_disabled">Copy mode disabled</string>
     <string name="api_source_not_found">Source not found</string>
     <string name="crash_log">Crash log</string>
     <string name="use_zh_layout">Custom Chinese line feed</string>

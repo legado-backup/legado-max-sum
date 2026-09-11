@@ -63,14 +63,14 @@ data class ReadRecordUiState(
     val isSelectionMode: Boolean = false,
     val selectedRecords: Set<RecordIdentity> = emptySet(),
     val timelineHasMore: Boolean = false,
-    val timelineLoadingMore: Boolean = false
+    val timelineLoadingMore: Boolean = false,
 )
 
 enum class DisplayMode {
     AGGREGATE,
     TIMELINE,
     LATEST,
-    READ_TIME
+    READ_TIME,
 }
 
 /**
@@ -80,7 +80,7 @@ enum class DisplayMode {
  * - LATEST / READ_TIME 模式不需要额外数据（使用 recordsFlow）
  */
 private data class ModeData(
-    val details: List<ReadRecordDetail>? = null
+    val details: List<ReadRecordDetail>? = null,
 )
 
 /** 轻量级统计数据（SQL 聚合，始终加载）。 */
@@ -88,13 +88,13 @@ private data class StatsData(
     val totalReadTime: Long,
     val dailyStats: List<DailyReadStat>,
     val todayReadTime: Long,
-    val todayBookCount: Int
+    val todayBookCount: Int,
 )
 
 /** 搜索 + 日期筛选状态。 */
 private data class FilterState(
     val query: String,
-    val dateStr: String?
+    val dateStr: String?,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -127,7 +127,7 @@ class ReadRecordViewModel : ViewModel() {
                 }
                 appCtx.putPrefInt(
                     PreferKey.readRecordRepairVersion,
-                    ReadRecordRepository.CURRENT_REPAIR_VERSION
+                    ReadRecordRepository.CURRENT_REPAIR_VERSION,
                 )
             }
         }
@@ -152,7 +152,7 @@ class ReadRecordViewModel : ViewModel() {
         repository.getTotalReadTime(),
         repository.getDailyStats(),
         repository.getReadTimeByDate(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)),
-        repository.getBookCountByDate(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE))
+        repository.getBookCountByDate(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)),
     ) { total, daily, todayTime, todayCount ->
         StatsData(total, daily, todayTime, todayCount)
     }
@@ -195,10 +195,13 @@ class ReadRecordViewModel : ViewModel() {
 
     /** 当前已加载的 timeline sessions（已合并+分组后的 Map） */
     private val _timelineSessions = MutableStateFlow<Map<String, List<ReadRecordSession>>>(emptyMap())
+
     /** 当前已加载的原始 sessions（用于增量追加） */
     private val _timelineRawSessions = MutableStateFlow<List<ReadRecordSession>>(emptyList())
+
     /** 是否还有更多数据可加载 */
     private val _timelineHasMore = MutableStateFlow(false)
+
     /** 是否正在加载更多 */
     private val _timelineLoadingMore = MutableStateFlow(false)
 
@@ -244,7 +247,10 @@ class ReadRecordViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             _timelineLoadingMore.value = true
             val moreSessions = repository.loadSessionsPage(
-                query, dateStr, lastSession.startTime, timelinePageSize
+                query,
+                dateStr,
+                lastSession.startTime,
+                timelinePageSize,
             )
             if (moreSessions.isEmpty()) {
                 _timelineHasMore.value = false
@@ -292,14 +298,14 @@ class ReadRecordViewModel : ViewModel() {
         val timelineHasMore: Boolean,
         val timelineLoadingMore: Boolean,
         val isSelectionMode: Boolean,
-        val selectedRecords: Set<RecordIdentity>
+        val selectedRecords: Set<RecordIdentity>,
     )
 
     private val extraState = combine(
         _timelineSessions,
         _timelineHasMore,
         _timelineLoadingMore,
-        selectionState
+        selectionState,
     ) { sessions, hasMore, loadingMore, selection ->
         val (isSel, selRecs) = selection
         ExtraState(sessions, hasMore, loadingMore, isSel, selRecs)
@@ -313,7 +319,7 @@ class ReadRecordViewModel : ViewModel() {
         recordsFlow,
         modeDataFlow,
         filterState,
-        extraState
+        extraState,
     ) { stats, records, modeData, filter, extra ->
         val selectedDate = filter.dateStr?.let { LocalDate.parse(it, DateTimeFormatter.ISO_LOCAL_DATE) }
 
@@ -365,24 +371,22 @@ class ReadRecordViewModel : ViewModel() {
             isSelectionMode = extra.isSelectionMode,
             selectedRecords = extra.selectedRecords,
             timelineHasMore = extra.timelineHasMore,
-            timelineLoadingMore = extra.timelineLoadingMore
+            timelineLoadingMore = extra.timelineLoadingMore,
         )
     }.flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ReadRecordUiState(isLoading = true)
+            initialValue = ReadRecordUiState(isLoading = true),
         )
 
     /**
      * 构建时间线 Map：按日期分组 + 合并连续会话。
      */
-    private fun buildTimelineMap(sessions: List<ReadRecordSession>): Map<String, List<ReadRecordSession>> {
-        return sessions
-            .groupBy { dateFormat.format(Date(it.startTime)) }
-            .mapValues { (_, daySessions) -> mergeContinuousSessions(daySessions).reversed() }
-            .toSortedMap(compareByDescending { it })
-    }
+    private fun buildTimelineMap(sessions: List<ReadRecordSession>): Map<String, List<ReadRecordSession>> = sessions
+        .groupBy { dateFormat.format(Date(it.startTime)) }
+        .mapValues { (_, daySessions) -> mergeContinuousSessions(daySessions).reversed() }
+        .toSortedMap(compareByDescending { it })
 
     fun setSearchKey(query: String) {
         _searchKey.value = query
@@ -439,7 +443,7 @@ class ReadRecordViewModel : ViewModel() {
                 mergedList[mergedList.lastIndex] = last.copy(
                     endTime = maxOf(last.endTime, current.endTime),
                     // 章节名取最新碎片：连续阅读时碎片会不断合并，必须跟随最后读到的章节
-                    durChapterTitle = current.durChapterTitle.ifBlank { last.durChapterTitle }
+                    durChapterTitle = current.durChapterTitle.ifBlank { last.durChapterTitle },
                 )
             } else {
                 mergedList.add(current.copy())
@@ -448,9 +452,7 @@ class ReadRecordViewModel : ViewModel() {
         return mergedList
     }
 
-    suspend fun getChapterTitle(bookName: String, bookAuthor: String, chapterIndexLong: Long): String? {
-        return bookRepository.getChapterTitle(bookName, bookAuthor, chapterIndexLong.toInt())
-    }
+    suspend fun getChapterTitle(bookName: String, bookAuthor: String, chapterIndexLong: Long): String? = bookRepository.getChapterTitle(bookName, bookAuthor, chapterIndexLong.toInt())
 
     suspend fun getBookDurChapterTitle(bookName: String, bookAuthor: String): String? {
         val key = cacheKey(bookName, bookAuthor)
@@ -471,13 +473,9 @@ class ReadRecordViewModel : ViewModel() {
         return result
     }
 
-    fun getConfiguredDefaultCover(): String? {
-        return bookRepository.getConfiguredDefaultCover()
-    }
+    fun getConfiguredDefaultCover(): String? = bookRepository.getConfiguredDefaultCover()
 
-    suspend fun getMergeCandidates(targetRecord: ReadRecord): List<ReadRecord> {
-        return repository.getMergeCandidates(targetRecord)
-    }
+    suspend fun getMergeCandidates(targetRecord: ReadRecord): List<ReadRecord> = repository.getMergeCandidates(targetRecord)
 
     fun mergeReadRecords(targetRecord: ReadRecord, sourceRecords: List<ReadRecord>) {
         if (sourceRecords.isEmpty()) return
@@ -544,24 +542,32 @@ class ReadRecordViewModel : ViewModel() {
         val allIdentities = _selectedRecords.value.toMutableSet()
         when (displayMode) {
             DisplayMode.LATEST -> {
-                allIdentities.addAll(uiState.value.latestRecords.map { 
-                    recordIdentity(it.deviceId, it.bookName, it.bookAuthor) 
-                })
+                allIdentities.addAll(
+                    uiState.value.latestRecords.map {
+                        recordIdentity(it.deviceId, it.bookName, it.bookAuthor)
+                    },
+                )
             }
             DisplayMode.READ_TIME -> {
-                allIdentities.addAll(uiState.value.readTimeRecords.map { 
-                    recordIdentity(it.deviceId, it.bookName, it.bookAuthor) 
-                })
+                allIdentities.addAll(
+                    uiState.value.readTimeRecords.map {
+                        recordIdentity(it.deviceId, it.bookName, it.bookAuthor)
+                    },
+                )
             }
             DisplayMode.AGGREGATE -> {
-                allIdentities.addAll(uiState.value.groupedRecords.values.flatten().map { 
-                    recordIdentity(it.deviceId, it.bookName, it.bookAuthor) 
-                })
+                allIdentities.addAll(
+                    uiState.value.groupedRecords.values.flatten().map {
+                        recordIdentity(it.deviceId, it.bookName, it.bookAuthor)
+                    },
+                )
             }
             DisplayMode.TIMELINE -> {
-                allIdentities.addAll(uiState.value.timelineRecords.values.flatten().map { 
-                    recordIdentity(it.deviceId, it.bookName, it.bookAuthor) 
-                })
+                allIdentities.addAll(
+                    uiState.value.timelineRecords.values.flatten().map {
+                        recordIdentity(it.deviceId, it.bookName, it.bookAuthor)
+                    },
+                )
             }
         }
         _selectedRecords.value = allIdentities
@@ -573,7 +579,7 @@ class ReadRecordViewModel : ViewModel() {
                 ReadRecord(
                     deviceId = identity.first,
                     bookName = identity.second,
-                    bookAuthor = identity.third
+                    bookAuthor = identity.third,
                 )
             }
             selectedList.forEach { record ->
@@ -591,7 +597,7 @@ class ReadRecordViewModel : ViewModel() {
             bookName = bookName,
             bookAuthor = bookAuthor,
             readTime = 30 * 60 * 1000L,
-            lastRead = now
+            lastRead = now,
         )
         val session = ReadRecordSession(
             deviceId = deviceId,
@@ -599,7 +605,7 @@ class ReadRecordViewModel : ViewModel() {
             bookAuthor = bookAuthor,
             startTime = now - 30 * 60 * 1000L,
             endTime = now,
-            words = 5000L
+            words = 5000L,
         )
         viewModelScope.launch {
             repository.saveReadSession(session)
@@ -607,24 +613,16 @@ class ReadRecordViewModel : ViewModel() {
         return record
     }
 
-    fun isSelected(record: ReadRecord): Boolean {
-        return _selectedRecords.value.contains(recordIdentity(record.deviceId, record.bookName, record.bookAuthor))
-    }
+    fun isSelected(record: ReadRecord): Boolean = _selectedRecords.value.contains(recordIdentity(record.deviceId, record.bookName, record.bookAuthor))
 
-    fun isSelected(detail: ReadRecordDetail): Boolean {
-        return _selectedRecords.value.contains(recordIdentity(detail.deviceId, detail.bookName, detail.bookAuthor))
-    }
+    fun isSelected(detail: ReadRecordDetail): Boolean = _selectedRecords.value.contains(recordIdentity(detail.deviceId, detail.bookName, detail.bookAuthor))
 
-    fun isSelected(session: ReadRecordSession): Boolean {
-        return _selectedRecords.value.contains(recordIdentity(session.deviceId, session.bookName, session.bookAuthor))
-    }
+    fun isSelected(session: ReadRecordSession): Boolean = _selectedRecords.value.contains(recordIdentity(session.deviceId, session.bookName, session.bookAuthor))
 
     private fun cacheKey(bookName: String, bookAuthor: String) = "$bookName|$bookAuthor"
 }
 
-private fun recordIdentity(deviceId: String, bookName: String, bookAuthor: String): RecordIdentity {
-    return Triple(deviceId, bookName, bookAuthor)
-}
+private fun recordIdentity(deviceId: String, bookName: String, bookAuthor: String): RecordIdentity = Triple(deviceId, bookName, bookAuthor)
 
 /**
  * 当前连续阅读天数：从今天（或昨天）开始往前数，连续有阅读记录的最大天数。

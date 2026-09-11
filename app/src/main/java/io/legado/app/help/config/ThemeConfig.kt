@@ -3,6 +3,8 @@ package io.legado.app.help.config
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.Drawable
+import android.os.Handler
+import android.os.Looper
 import android.util.DisplayMetrics
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatDelegate
@@ -62,21 +64,41 @@ object ThemeConfig {
 
     private var needClearImg = true
 
+/** RECREATE 广播防抖窗口：一次应用主题产生的多路重建触发合并为一次通知 */
+    private const val recreateNotifyDelay = 1500L
+
+    private val recreateHandler = Handler(Looper.getMainLooper())
+
+    private val notifyRecreateRunnable = Runnable {
+        postEvent(EventBus.RECREATE, "")
+    }
+
+    /**
+     * 发送 RECREATE 重建事件（尾沿防抖）。
+     *
+     * `applyDayNight` 内部 `setDefaultNightMode` 会触发配置变化回调，回调链路里也会申请重建；
+     * 高频直发会形成「重建风暴」（一次点击多次广播 + 多窗口并发重建）。
+     * 这里在静默窗口内合并多路触发，窗口结束后只发一次；期间若出现新的真实操作，窗口顺延，
+     * 保证最后一次操作总是生效（不会被窗口期吞掉）。
+     */
+    fun notifyRecreate() {
+        recreateHandler.removeCallbacks(notifyRecreateRunnable)
+        recreateHandler.postDelayed(notifyRecreateRunnable, recreateNotifyDelay)
+    }
+
     fun getTheme() = when {
         AppConfig.isEInkMode -> Theme.EInk
         AppConfig.isNightTheme -> Theme.Dark
         else -> Theme.Light
     }
 
-    fun isDarkTheme(): Boolean {
-        return getTheme() == Theme.Dark
-    }
+    fun isDarkTheme(): Boolean = getTheme() == Theme.Dark
 
     fun applyDayNight(context: Context) {
         applyTheme(context)
         initNightMode()
         BookCover.upDefaultCover()
-        postEvent(EventBus.RECREATE, "")
+        notifyRecreate()
     }
 
     fun applyDayNightInit(context: Context) {
@@ -113,7 +135,7 @@ object ThemeConfig {
         val preferenceKey = when (themeMode) {
             Theme.Light -> PreferKey.bgImage
             Theme.Dark -> PreferKey.bgImageN
-            else -> return  null
+            else -> return null
         }
         var path = context.getPrefString(preferenceKey)
         if (path.isNullOrBlank()) return null
@@ -275,7 +297,7 @@ object ThemeConfig {
     }
 
     suspend fun addConfigs(newConfigs: List<Config>?) {
-        val newConfigs = newConfigs?.filter{
+        val newConfigs = newConfigs?.filter {
             validateConfig(it)
         }
         if (newConfigs.isNullOrEmpty()) {
@@ -437,7 +459,7 @@ object ThemeConfig {
             bottomBackground = "#${bBackground.hexString}",
             transparentNavBar = transparentNavBar,
             backgroundImgPath = bgImgPath,
-            backgroundImgBlur = bgImgBlur
+            backgroundImgBlur = bgImgBlur,
         )
     }
 
@@ -450,12 +472,12 @@ object ThemeConfig {
         val primary =
             context.getPrefInt(
                 PreferKey.cNPrimary,
-                context.getCompatColor(R.color.default_night_primary)
+                context.getCompatColor(R.color.default_night_primary),
             )
         val accent =
             context.getPrefInt(
                 PreferKey.cNAccent,
-                context.getCompatColor(R.color.default_night_accent)
+                context.getCompatColor(R.color.default_night_accent),
             )
         val background =
             context.getPrefInt(PreferKey.cNBackground, context.getCompatColor(R.color.default_night_background))
@@ -476,7 +498,7 @@ object ThemeConfig {
             bottomBackground = "#${bBackground.hexString}",
             transparentNavBar = transparentNavBar,
             backgroundImgPath = bgImgPath,
-            backgroundImgBlur = bgImgBlur
+            backgroundImgBlur = bgImgBlur,
         )
     }
 
@@ -593,25 +615,23 @@ object ThemeConfig {
         var bottomBackground: String,
         var transparentNavBar: Boolean,
         var backgroundImgPath: String?,
-        var backgroundImgBlur: Int
+        var backgroundImgBlur: Int,
     ) {
 
-        override fun hashCode(): Int {
-            return GSON.toJson(this).hashCode()
-        }
+        override fun hashCode(): Int = GSON.toJson(this).hashCode()
 
         override fun equals(other: Any?): Boolean {
             other ?: return false
             if (other is Config) {
-                return other.themeName == themeName
-                        && other.isNightTheme == isNightTheme
-                        && other.primaryColor == primaryColor
-                        && other.accentColor == accentColor
-                        && other.backgroundColor == backgroundColor
-                        && other.bottomBackground == bottomBackground
-                        && other.transparentNavBar == transparentNavBar
-                        && other.backgroundImgPath == backgroundImgPath
-                        && other.backgroundImgBlur == backgroundImgBlur
+                return other.themeName == themeName &&
+                    other.isNightTheme == isNightTheme &&
+                    other.primaryColor == primaryColor &&
+                    other.accentColor == accentColor &&
+                    other.backgroundColor == backgroundColor &&
+                    other.bottomBackground == bottomBackground &&
+                    other.transparentNavBar == transparentNavBar &&
+                    other.backgroundImgPath == backgroundImgPath &&
+                    other.backgroundImgBlur == backgroundImgBlur
             }
             return false
         }
@@ -625,9 +645,7 @@ object ThemeConfig {
             "bottomBackground" to bottomBackground,
             "transparentNavBar" to transparentNavBar,
             "backgroundImgPath" to backgroundImgPath,
-            "backgroundImgBlur" to backgroundImgBlur
+            "backgroundImgBlur" to backgroundImgBlur,
         )
-
     }
-
 }

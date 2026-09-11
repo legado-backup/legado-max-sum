@@ -78,6 +78,7 @@ Compose 规范拆分为 8 个文件，位于 `docs/project-rules/compose/`（目
 - **数据层（Repository）**：[`docs/project-rules/repository-rules.md`](docs/project-rules/repository-rules.md)，新增数据访问逻辑必须遵循。
 - **API 兼容**：[`docs/project-rules/api-compat-rules.md`](docs/project-rules/api-compat-rules.md)。调用高于 minSdk 23 的 API、引入新依赖、发版前必读（SDK 分支写法、desugaring 边界、16KB 对齐等 targetSdk 37 红线）。
 - **事件总线**：[`docs/project-rules/live-event-bus-rules.md`](docs/project-rules/live-event-bus-rules.md)。新增跨组件事件、在 LiveEventBus 与 Compose `Channel<Event>` 之间选型时必读。
+- **更新日志规范**：[`docs/project-rules/update-log-rules.md`](docs/project-rules/update-log-rules.md)。提交 app 用户可见改动（bug/界面/功能）后，按其中时机与收录范围维护 `app/src/main/assets/web/help/md/updateLog.md`；发版前必须更新到位。
 - **架构与设计说明**：[`docs/architecture/`](docs/architecture/) 存放长期有效的模块架构、设计方案、技术笔记（Web 服务架构、高亮规则架构、Cookie 管理设计等）。想了解某个模块"现在是怎么设计的"先翻这里；一次性改造方案在 `docs/archive/`，两者不要混。
 
 ### 计划/方案文档的收尾

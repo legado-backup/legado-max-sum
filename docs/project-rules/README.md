@@ -20,11 +20,12 @@
 
 > 以下文件是**工程配置参考 / 手册**，不是强制规范：内容随工程调整，不进入 Review 标尺。
 
-| 文件                                     | 内容                                                                                        | 什么时候读                                                                             |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [build-commands.md](./build-commands.md) | 构建命令全表、Web 前端命令、3 个 flavor、SDK/JDK/版本目录                                   | 构建报错、首次构建、不认识 flavor / 命令、动 `libs.versions.toml` 或 `modules/web/` 时 |
-| [ci-cd.md](./ci-cd.md)                   | `.github/workflows/` 各 workflow 职责与触发条件                                             | CI 报错、调整 workflow、确认发版 / 构建流程时                                          |
-| [testing.md](./testing.md)               | 单元/集成测试位置与命令、覆盖率约定、Mockk / coroutines-test / LeakCanary、测试文件提交约定 | 写测试前、跑测试、决定提交测试文件时                                                   |
+| 文件                                         | 内容                                                                                                 | 什么时候读                                                                             |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [build-commands.md](./build-commands.md)     | 构建命令全表、Web 前端命令、3 个 flavor、SDK/JDK/版本目录                                            | 构建报错、首次构建、不认识 flavor / 命令、动 `libs.versions.toml` 或 `modules/web/` 时 |
+| [ci-cd.md](./ci-cd.md)                       | `.github/workflows/` 各 workflow 职责与触发条件                                                      | CI 报错、调整 workflow、确认发版 / 构建流程时                                          |
+| [testing.md](./testing.md)                   | 单元/集成测试位置与命令、覆盖率约定、Mockk / coroutines-test / LeakCanary、测试文件提交约定          | 写测试前、跑测试、决定提交测试文件时                                                   |
+| [update-log-rules.md](./update-log-rules.md) | 对外更新日志 `app/src/main/assets/web/help/md/updateLog.md` 的更新时机、收录范围、格式与用户措辞约定 | 提交 app 用户可见改动后、发版前维护 `updateLog.md`，或 Review 日志条目时               |
 
 ### Compose UI 层（`compose/` 子目录）
 
@@ -57,6 +58,7 @@
 | 事件双轨（LiveEventBus vs `Channel<Event>`）         | ✅ live-event-bus-rules.md（§3 双轨选型裁决规则）                 |
 | 后台任务 / 服务（WorkManager / ForegroundService）   | ⚠️ 仅一句话（coroutine-rules.md 规则 3），无独立规范              |
 | 日志与 PII 脱敏                                      | ❌ 缺                                                             |
+| 对外发布日志（updateLog.md）                         | ✅ update-log-rules.md                                            |
 | API 兼容 / minSdk 23 红线                            | ✅ api-compat-rules.md                                            |
 
 ## 三、跨文件规则速查（高频冲突点，已对齐）

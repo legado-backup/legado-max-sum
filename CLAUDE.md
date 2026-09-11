@@ -18,7 +18,7 @@ Gradle wrapper（Windows 下 `gradlew.bat`），JDK 17。常用命令（完整�
 ./gradlew assembleDebug            # Debug 构建（默认 flavor：appMax）
 ./gradlew installAppMaxDebug       # 安装到设备
 ./gradlew test                     # 单元测试
-./gradlew lint                     # Lint（CI 中也有 lint.yaml，通过视为完成的一部分）
+./gradlew lint                     # Android Lint，本地最后门禁（验证顺序：单测 → lint；CI 的 lint.yaml 通过同样视为完成的一部分）
 ./gradlew app:downloadCronet       # 首次构建前必须跑，下载 Cronet 原生库
 ./gradlew assembleDebug --warning-mode all   # 查看 DSL 语法警告
 ```

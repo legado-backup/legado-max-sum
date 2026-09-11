@@ -1326,7 +1326,7 @@
     <string name="backup_selector">備份選擇器</string>
     <string name="backup_selector_summary">選擇要備份的資料</string>
     <string name="backward_pre_download">向前預下載</string>
-    <string name="backward_pre_download_s">預先下載前面的 %d 章節</string>
+    <string name="backward_pre_download_s">預先下載前面的 %s 章節</string>
     <string name="book_cache_selector">書籍快取選擇器</string>
     <string name="book_cache_selector_summary">選擇要快取的書籍</string>
     <string name="bookmark_search_book_text">搜尋書籍文字</string>

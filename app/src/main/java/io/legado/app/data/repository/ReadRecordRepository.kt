@@ -5,6 +5,7 @@ import io.legado.app.data.dao.ReadRecordDao
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
+import io.legado.app.data.entities.readRecord.ReadRecordSessionDisplay
 import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.constant.AppConst
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +26,7 @@ class ReadRecordRepository(
     private val currentDeviceIdProvider: () -> String = { AppConst.androidId },
 ) {
     companion object {
-        const val CURRENT_REPAIR_VERSION = 4
+        const val CURRENT_REPAIR_VERSION = 5
 
         /** 相邻阅读片段的会话合并阈值（毫秒）：间隔 ≤ 20 分钟视为同一次阅读，与时间线视图 mergeContinuousSessions 口径一致 */
         const val SESSION_MERGE_GAP = 20 * 60 * 1000L
@@ -168,35 +169,57 @@ class ReadRecordRepository(
             sessions
                 .groupBy { dateFormat.format(Date(it.startTime)) }
                 .mapValues { (_, daySessions) ->
-                    mergeCloseSessions(daySessions).sortedByDescending { it.startTime }
+                    // readTime 按未合并的原始会话时长求和（真实阅读时间）；
+                    // 合并后的展示时段端点跨度包含暂停间隙，直接求和会虚高
+                    ReadRecordTimelineDay(
+                        date = dateFormat.format(Date(daySessions.minOf { it.startTime })),
+                        sessions = mergeCloseSessions(daySessions).sortedByDescending { it.session.startTime },
+                        readTime = daySessions.sumOf { (it.endTime - it.startTime).coerceAtLeast(0L) }
+                    )
                 }
                 .toSortedMap(compareByDescending { it })
-                .map { (date, daySessions) ->
-                    ReadRecordTimelineDay(date = date, sessions = daySessions)
-                }
+                .map { (_, day) -> day }
         }
     }
 
     /**
-     * 合并同一天内间隔 ≤ [SESSION_MERGE_GAP] 的相邻会话（翻页高频上报产生的碎片）。
+     * 合并同一天内间隔 ≤ [gap] 的相邻会话（翻页高频上报产生的碎片）。
+     * gap 传 0 时只合并首尾相接/重叠的片段，合并前后时长总和不变。
+     *
+     * 返回值携带 [ReadRecordSessionDisplay.readTime]（各碎片时长之和，不含合并间隙），
+     * 展示时长一律用它而非合并区间的端点跨度。
      */
-    private fun mergeCloseSessions(sessions: List<ReadRecordSession>): List<ReadRecordSession> {
+    private fun mergeCloseSessions(sessions: List<ReadRecordSession>, gap: Long = SESSION_MERGE_GAP): List<ReadRecordSessionDisplay> {
         if (sessions.isEmpty()) return emptyList()
         val sorted = sessions.sortedBy { it.startTime }
-        val merged = mutableListOf<ReadRecordSession>()
-        merged.add(sorted.first().copy())
+        val merged = mutableListOf<ReadRecordSessionDisplay>()
+        val first = sorted.first()
+        merged.add(
+            ReadRecordSessionDisplay(
+                session = first.copy(),
+                readTime = (first.endTime - first.startTime).coerceAtLeast(0L)
+            )
+        )
         for (i in 1 until sorted.size) {
             val current = sorted[i]
             val last = merged.last()
-            if ((current.startTime - last.endTime) <= SESSION_MERGE_GAP) {
+            if ((current.startTime - last.session.endTime) <= gap) {
                 merged[merged.lastIndex] = last.copy(
-                    endTime = max(current.endTime, last.endTime),
-                    words = last.words + current.words,
-                    // 章节名取最新碎片：连续阅读时碎片会不断合并，必须跟随最后读到的章节
-                    durChapterTitle = current.durChapterTitle.ifBlank { last.durChapterTitle },
+                    session = last.session.copy(
+                        endTime = max(current.endTime, last.session.endTime),
+                        words = last.session.words + current.words,
+                        // 章节名取最新碎片：连续阅读时碎片会不断合并，必须跟随最后读到的章节
+                        durChapterTitle = current.durChapterTitle.ifBlank { last.session.durChapterTitle }
+                    ),
+                    readTime = last.readTime + (current.endTime - current.startTime).coerceAtLeast(0L)
                 )
             } else {
-                merged.add(current.copy())
+                merged.add(
+                    ReadRecordSessionDisplay(
+                        session = current.copy(),
+                        readTime = (current.endTime - current.startTime).coerceAtLeast(0L)
+                    )
+                )
             }
         }
         return merged
@@ -580,7 +603,30 @@ class ReadRecordRepository(
         cleanupBlankBookNameData()
         fixEmptyAuthors(getAuthorByBookName)
         normalizeDuplicateDeviceRecords()
+        compactSessions()
         rebuildAggregateRecordsFromHistory()
+    }
+
+    /**
+     * 压缩历史会话碎片：同一本书同一天内首尾相接/重叠的碎片合并为一条。
+     * 只合并连续片段（gap = 0），合并前后时长总和不变，不影响聚合统计；
+     * 修复 v5 执行一次，用于清理旧版本"每次翻页写一条会话"产生的海量碎片。
+     */
+    suspend fun compactSessions() = withContext(Dispatchers.IO) {
+        dao.getDistinctSessionIdentities().forEach { identity ->
+            val sessions = dao.getSessionsByBook(identity.deviceId, identity.bookName, identity.bookAuthor)
+            if (sessions.size <= 1) return@forEach
+            val merged = sessions
+                .groupBy { dateFormat.format(Date(it.startTime)) }
+                .flatMap { (_, daySessions) -> mergeCloseSessions(daySessions, gap = 0L) }
+            if (merged.size < sessions.size) {
+                // 先按原 id REPLACE 合并后的会话，再删除被吸收的碎片，任一步中断重跑即可收敛
+                val mergedSessions = merged.map { it.session }
+                dao.insertAllSessions(mergedSessions)
+                val mergedIds = mergedSessions.map { it.id }.toSet()
+                dao.deleteSessionsByIds(sessions.map { it.id }.filter { it !in mergedIds })
+            }
+        }
     }
 
     suspend fun cleanupBlankBookNameData() {

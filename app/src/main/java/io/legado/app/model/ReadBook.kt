@@ -10,9 +10,6 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookProgress
 import io.legado.app.constant.AppConst
 import io.legado.app.data.entities.BookSource
-import io.legado.app.data.entities.readRecord.ReadRecord
-import io.legado.app.data.entities.readRecord.ReadRecordSession
-import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
@@ -88,8 +85,6 @@ object ReadBook : CoroutineScope by MainScope() {
      * 确保高亮规则的 themeScope 按新主题重新匹配。
      */
     private var lastLayoutNightTheme: Boolean = false
-    private val readRecord = ReadRecord()
-    private var sessionStartTime = 0L
     private val chapterLoadingJobs = ConcurrentHashMap<Int, Coroutine<*>>()
     private val prevChapterLoadingLock = Mutex()
     private val curChapterLoadingLock = Mutex()
@@ -116,17 +111,9 @@ object ReadBook : CoroutineScope by MainScope() {
      */
     fun resetData(book: Book) {
         releaseAndCancel()
+        // 换书前落库上一本书未入库的阅读会话
+        ReadSessionRecorder.flush()
         ReadBook.book = book
-        readRecord.bookName = book.name
-        readRecord.bookAuthor = book.author
-        readRecord.deviceId = AppConst.androidId
-        readRecord.readTime = kotlinx.coroutines.runBlocking {
-            appDb.readRecordDao.getReadTime(
-                AppConst.androidId, book.name, book.author
-            )
-        } ?: 0L
-        readRecord.lastRead = System.currentTimeMillis()
-        sessionStartTime = System.currentTimeMillis()
         readStartTime = System.currentTimeMillis()
         chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
         simulatedChapterSize = if (book.readSimulating()) {
@@ -363,44 +350,48 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     }
 
+    /**
+     * 翻页心跳：只延长内存中的打开会话，不逐页写库（避免产生海量碎片会话）。
+     * 会话在暂停/退出/换书/跨度过长时由 [ReadSessionRecorder] 统一落库。
+     */
     fun upReadTime() {
-        if (!AppConfig.enableReadRecord || book == null) {
-            return
-        }
-        executor.execute {
-            val now = System.currentTimeMillis()
-            val delta = now - readStartTime
-            readStartTime = now
-            readRecord.lastRead = now
-            readRecord.durChapterTitle = book?.durChapterTitle.orEmpty()
-
-            val session = ReadRecordSession(
-                deviceId = readRecord.deviceId,
-                bookName = readRecord.bookName,
-                bookAuthor = readRecord.bookAuthor,
-                startTime = sessionStartTime,
-                endTime = now,
-                words = 0,
-                durChapterTitle = readRecord.durChapterTitle
-            )
-
-            val repository = ReadRecordRepository(appDb.readRecordDao)
-            kotlinx.coroutines.runBlocking {
-                repository.saveReadSession(session)
-            }
-
-            sessionStartTime = now
-        }
-    }
-
-    fun markReadStart() {
-        if (!AppConfig.enableReadRecord || book == null) {
+        val book = book ?: return
+        if (!AppConfig.enableReadRecord) {
             return
         }
         val now = System.currentTimeMillis()
-        sessionStartTime = now
         readStartTime = now
-        readRecord.lastRead = now
+        ReadSessionRecorder.onReadTick(
+            deviceId = AppConst.androidId,
+            bookName = book.name,
+            bookAuthor = book.author,
+            chapterTitle = book.durChapterTitle.orEmpty(),
+            now = now
+        )
+    }
+
+    /** 阅读暂停/退出：落库当前会话 */
+    fun flushReadTime() {
+        if (!AppConfig.enableReadRecord) {
+            return
+        }
+        ReadSessionRecorder.flush()
+    }
+
+    fun markReadStart() {
+        val book = book ?: return
+        if (!AppConfig.enableReadRecord) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        readStartTime = now
+        ReadSessionRecorder.onReadStart(
+            deviceId = AppConst.androidId,
+            bookName = book.name,
+            bookAuthor = book.author,
+            chapterTitle = book.durChapterTitle.orEmpty(),
+            now = now
+        )
     }
 
     fun upMsg(msg: String?) {

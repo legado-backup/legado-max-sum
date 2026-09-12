@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.base.BaseComposeActivity
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.readRecord.ReadRecordSession
+import io.legado.app.data.entities.readRecord.ReadRecordTimelineDay
 import io.legado.app.data.repository.ReadRecordRepository
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -188,8 +189,7 @@ fun BookReadRecordScreen(
                         key = { it.date }
                     ) { day ->
                         DaySection(
-                            date = day.date,
-                            sessions = day.sessions
+                            day = day
                         )
                     }
                 }
@@ -260,14 +260,16 @@ private fun StatChip(
 
 @Composable
 private fun DaySection(
-    date: String,
-    sessions: List<ReadRecordSession>
+    day: ReadRecordTimelineDay
 ) {
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val sessions = day.sessions
+    val date = day.date
     val sessionCount = sessions.size
-    val totalDuration = sessions.sumOf { (it.endTime - it.startTime).coerceAtLeast(0L) }
+    // 日合计用当天真实阅读时长（未合并会话之和）；合并后的展示时段端点跨度包含暂停间隙，不能直接求和
+    val totalDuration = day.readTime
 
     Column(
         modifier = Modifier
@@ -320,9 +322,9 @@ private fun DaySection(
                 modifier = Modifier.padding(top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                sessions.forEach { session ->
-                    val duration = (session.endTime - session.startTime).coerceAtLeast(0L)
-                    SessionRow(session, timeFormat, duration)
+                sessions.forEach { item ->
+                    // 行时长用该时段内的真实阅读时长（不含合并间隙），保证行时长之和等于日合计
+                    SessionRow(item.session, timeFormat, item.readTime)
                 }
             }
         }

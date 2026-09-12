@@ -71,9 +71,10 @@ execute {
 
 ## 4. Compose 场景红线
 
-- Composable 里禁止直接读 DB / 做耗时计算，数据必须来自 ViewModel 的 `State`。
-- 列表项 `LazyColumn` 必须 `key = {}` + 稳定（stable）的 item 参数类型。
-- `remember` / `derivedStateOf` 精确使用，不要用 `remember { 耗时计算() }` 制造缓存陷阱。
+Compose 侧的规则以 compose 目录为准，本文件不再重复维护：
+
+- Composable 禁止直接读 DB / 做耗时计算、`remember` / `derivedStateOf` 使用边界 → [compose/performance.md](compose/performance.md)
+- 状态收集必须 `collectAsStateWithLifecycle()`、`LazyColumn` key + stable 参数、事件消费绑定生命周期 → [compose/state-events.md](compose/state-events.md)
 
 ## 5. 反面示例（看到就改）
 

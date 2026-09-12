@@ -1,3 +1,6 @@
 docs/archive/**
 # 自动生成的超长更新日志，不做 prettier 全量重排
 CHANGELOG.md
+# Web服务前端构建产物与遗留 jQuery 脚本，prettier 重排会破坏压缩产物
+app/src/main/assets/web/vue/
+app/src/main/assets/web/uploadBook/

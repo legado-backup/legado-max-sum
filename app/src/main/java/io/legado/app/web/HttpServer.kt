@@ -30,7 +30,7 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
         "/getBookshelf", "/getChapterList", "/refreshToc", "/getBookContent",
         "/cover", "/image", "/getReadConfig",
         "/getRssSource", "/getRssSources",
-        "/getReplaceRules", "/backupPreview", "/backup",
+        "/getReplaceRules", "/backupPreview", "/backup", "/backup/",
         "/saveBookSource", "/saveBookSources", "/deleteBookSources",
         "/saveBook", "/deleteBook", "/saveBookProgress", "/addLocalBook", "/saveReadConfig",
         "/saveRssSource", "/saveRssSources", "/deleteRssSources",
@@ -135,7 +135,8 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
                     val parameters = session.parameters
 
                     when (uri) {
-                        "/backup" -> {
+                        //书架页按钮会以 /backup/ 带尾斜杠访问，两种写法都要命中备份接口
+                        "/backup", "/backup/" -> {
                             val response = BackupController.backup()
                             response.addHeader("Access-Control-Allow-Origin", session.headers["origin"])
                             LogUtils.d(TAG) {

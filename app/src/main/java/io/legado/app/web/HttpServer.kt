@@ -60,8 +60,9 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
     override fun serve(session: IHTTPSession): Response {
         WebService.serve()
         var returnData: ReturnData? = null
+        //必须保留完整头（含boundary）：用contentType重写会剥掉boundary，multipart解析必然失败
         val ct = ContentType(session.headers["content-type"]).tryUTF8()
-        session.headers["content-type"] = ct.contentType
+        session.headers["content-type"] = ct.contentTypeHeader
         var uri = session.uri
 
         val startAt = System.currentTimeMillis()

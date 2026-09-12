@@ -125,7 +125,7 @@ object BackupController {
             return NanoHTTPD.newFixedLengthResponse(
                 NanoHTTPD.Response.Status.INTERNAL_ERROR,
                 "application/json",
-                GSON.toJson(ReturnData().setErrorMsg("备份失败: ${error.message}")),
+                GSON.toJson(ReturnData().setErrorMsg("备份失败: ${error.message ?: "未知错误"}")),
             )
         }
 
@@ -148,6 +148,11 @@ object BackupController {
         )
     }
 
+    /**
+     * 后台执行一次备份并回填任务状态
+     * finally 中必须先在锁内清空inFlight再countDown：保证失败/成功后新请求都能开启新备份，
+     * 且清空与置位持有同一把锁，避免出现永远等待的孤儿任务
+     */
     private fun startBackup(flight: InFlightBackup) {
         backupScope.launch {
             try {

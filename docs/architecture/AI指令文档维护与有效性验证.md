@@ -54,3 +54,4 @@ code-review 的 Standards 轴（是否符合项目规范）报出的违规条数
 - Claude Code 官方文档《Best practices for Claude Code》：<https://code.claude.com/docs/en/best-practices> —— CLAUDE.md 调优思路的现行权威出处（2025 年工程博客《Claude Code: Best practices for agentic coding》已 308 重定向至此）。要点：每行自问"删掉会不会导致犯错"、屡教不改多半是文件太长、只对反复被忽略的一条加 IMPORTANT、默认做对的事删掉或改写成 hook。
 - 同站 Memory 章节《How Claude remembers your project》：<https://code.claude.com/docs/en/memory> —— CLAUDE.md 存放位置与加载顺序、@import 语法、单个文件建议 ≤200 行、`.claude/rules/` 按主题拆分并可用 paths 限定生效范围。
 - AGENTS.md 开放标准：<https://agents.md>
+- 相关工程文章《Effective context engineering for AI agents》：<https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents> —— 讲指令文件如何进入上下文、上下文预算与"注意力预算"问题，是 200 行建议的原理出处。

@@ -206,9 +206,9 @@ class MainActivity :
 
     /**
      * 计算当前主题背景的签名，统一委托 [ThemeConfig.getBackgroundSignature]，
-     * 与 BaseActivity 的进程级背景缓存使用同一口径。
+     * 与 BaseActivity 的进程级背景缓存使用同一口径；未配置背景图时为 null。
      */
-    private fun currentBackgroundSignature(): String = ThemeConfig.getBackgroundSignature(this)
+    private fun currentBackgroundSignature(): String? = ThemeConfig.getBackgroundSignature(this)
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         // 清理已销毁 Fragment 的引用，避免 fragmentMap 持有导致内存泄漏

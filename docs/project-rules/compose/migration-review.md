@@ -18,7 +18,7 @@ private fun ThemeAddBottomBar(...) { ... }
 // TODO(#issue号): 迁移到 ui/config/widget/ConfigAddBottomBar.kt，统一 Dim. 和 Color
 ```
 
-**要求**：`LegadoUiViolation` Suppress 必须伴随具体 TODO，否则 PR 打回。
+**要求**：`LegadoUiViolation` Suppress 必须伴随具体 TODO，否则 PR 打回。（注：该注解没有对应的 lint 规则，现阶段仅作为人工 Review 的标记使用，见 §14.1 说明。）
 
 ### 阶段二：清理（次 Sprint）
 
@@ -34,7 +34,7 @@ private fun ThemeAddBottomBar(...) { ... }
 
 ## 14. Code Review Checklist
 
-分两层：**机器项先行（CI 硬卡），人工项次之（Review）**。机器规则已把违规拦在构建阶段的，Reviewer 不重复检查。
+分两层设计：**机器项（CI 硬卡）、人工项（Review）**。注意：机器项的强制机制**尚未建立**（见 §14.1 目标态声明），现阶段表中所有条目一律按 §14.2 人工对照执行。
 
 ### 14.1 [机器] CI 硬卡（违规 = 构建红，不依赖 Reviewer 心情）
 
@@ -55,7 +55,7 @@ private fun ThemeAddBottomBar(...) { ... }
 | 阶段三起新增 `@Suppress("LegadoUiViolation")`                                                                       | CI grep，直接挂                                                                          |
 | 新增 `*ViewModel.kt` 但无对应 `*ViewModelTest.kt`（`testing.md` §16.4）                                             | CI 脚本对比 src/test 路径                                                                |
 
-> 机器规则统一维护在 `tools/lint-rules/` 独立模块并纳入 CI。**修改本表的 PR 必须同步更新规则代码**，只改文档不改规则的一律视为"未落地"，打回。
+> **目标态声明**：上表「实现方式」列描述的是目标态——机器规则统一维护在 `tools/lint-rules/` 独立模块并纳入 CI。该模块**当前尚未建立**（Detekt、compose-lint-checks 也未接入），表中规则现阶段一律按人工 Review 对照执行，不构成 CI 硬卡。规则模块落地后本表才成为构建期强制依据，届时「修改本表的 PR 必须同步更新规则代码」。
 
 ### 14.2 [人工] Reviewer 对照（任一 ❌ 打回）
 

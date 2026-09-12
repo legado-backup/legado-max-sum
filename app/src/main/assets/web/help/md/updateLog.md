@@ -24,6 +24,13 @@
 - [Github分支GEd520](https://github.com/GEd520/legados)
 - [Github分支Suml-1](https://github.com/Suml-1/Legado_Max)
 
+**2026/9/12**
+
+- fix(主题): 修复清空背景图后无法回到纯色底的问题
+- fix(主题): 修复主界面轻微滑动后画面持续闪烁的问题
+- fix(底栏): 修复纯色背景下底栏玻璃/磨砂效果几乎不可见的问题
+- fix(兼容): Android 12 的底栏玻璃/磨砂改用静态玻璃材质渲染，实时玻璃效果需 Android 13 及以上
+
 **2026/9/11**
 
 - refactor(顶栏): 阅读记录/URL记录、书源检测、配置管理、缓存选择、封面HTML及模板等页面顶栏统一接入 AppPageTopBar，保留页面滚动收起行为

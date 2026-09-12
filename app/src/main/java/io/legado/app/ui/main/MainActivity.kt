@@ -49,6 +49,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.getSecondaryTextColor
@@ -177,7 +178,8 @@ class MainActivity :
      * 其他注意点：
      * - 背景图解码在子线程异步执行，回调 [onBackgroundDrawableLoaded] 在主线程触发后
      *   才同步 content_container；decode 失败或无背景图配置时 drawable 为 null，
-     *   会将 content_container 背景同步为 null（清除背景，不遗留旧背景图）。
+     *   此时 content_container 回退为**主题纯色底**而非置空——采样源若透明，
+     *   玻璃/磨砂在纯色背景下完全失效（无像素可供折射/模糊）。
      * - mutate() 仅克隆 Drawable 状态对象，底层像素（bitmap/constantState）仍与 decorView
      *   共享，不会因双份背景导致像素内存翻倍，仅额外占用一份轻量状态对象。
      */
@@ -200,7 +202,10 @@ class MainActivity :
         // 使用 constantState?.newDrawable()?.mutate() 创建独立副本，
         // 避免两个 View 共享同一 Drawable 状态导致绘制冲突
         // 注意：此处会无条件覆盖 content_container 背景，详见上方约束说明
+        // 无背景图时回退主题纯色底：LiquidGlass 只能采到 content_container 自身
+        // 的绘制内容，背景置 null 会使采样源透明，玻璃/磨砂效果随之失效
         binding.contentContainer.background = drawable?.constantState?.newDrawable()?.mutate()
+            ?: backgroundColor.toDrawable()
         backgroundImageApplied = true
     }
 

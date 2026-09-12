@@ -16,7 +16,7 @@
 
 - **Mock 框架**：Mockk
 - **协程测试**：kotlinx-coroutines-test
-- **覆盖率要求**：核心模块 ≥ 80%（视环境情况执行）
+- **覆盖率**：数字不作验收指标（口径与 compose/testing.md §16.4 一致）；真实约束是新增 ViewModel / 修改状态机的 PR 必须有对应测试
 - **内存泄漏检测**：LeakCanary，仅 `debugImplementation`，只开在 debug 构建
 
 ## 3. 命令

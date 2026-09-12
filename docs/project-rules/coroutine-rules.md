@@ -19,12 +19,12 @@ fun <T> execute(
 ): Coroutine<T>
 ```
 
-| 宿主类 | `scope` 默认值 | 文件 |
-|---|---|---|
-| `BaseViewModel` | `viewModelScope` | `base/BaseViewModel.kt` |
-| `BaseActivity` / `BaseFragment` | `lifecycleScope` | `base/` 对应文件 |
-| `BaseDialogFragment` | `lifecycleScope` | `base/BaseDialogFragment.kt` |
-| `BaseService` | `lifecycleScope` | `base/BaseService.kt` |
+| 宿主类                          | `scope` 默认值   | 文件                         |
+| ------------------------------- | ---------------- | ---------------------------- |
+| `BaseViewModel`                 | `viewModelScope` | `base/BaseViewModel.kt`      |
+| `BaseActivity` / `BaseFragment` | `lifecycleScope` | `base/` 对应文件             |
+| `BaseDialogFragment`            | `lifecycleScope` | `base/BaseDialogFragment.kt` |
+| `BaseService`                   | `lifecycleScope` | `base/BaseService.kt`        |
 
 返回的 `Coroutine<T>` 是**链式包装类**，不是 `kotlinx.coroutines.Coroutine<T>`（接口），别混淆。支持链式方法：
 
@@ -67,7 +67,7 @@ execute {
 - **Repository 层**对外暴露 `Flow`（数据库监听、网络流），ViewModel 层消费。
 - ViewModel 中消费 Flow 订阅 UI 状态：`execute { collect }` 或 `lifecycleScope` + `repeatOnLifecycle(STARTED)`（Compose 场景）。
 - **禁止**在 Composable 函数体内直接 `collect` 或读数据库；用 `collectAsStateWithLifecycle()` 之类的桥接。
-- 一次性事件（导航、toast）不要塞进 `StateFlow`，走 `LiveEventBus`（本项目既有约定）或 `SharedFlow`。
+- 一次性事件（导航、toast）不要塞进 `StateFlow`：View 侧走 `LiveEventBus`，Compose 侧走 `Channel<Event>`（缓冲区分档见 compose/state-events.md §4.1，双轨选型裁决见 live-event-bus-rules.md §3 与 README 速查表）。
 
 ## 4. Compose 场景红线
 

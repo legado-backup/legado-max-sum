@@ -3,6 +3,7 @@ package io.legado.app.base
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.util.AttributeSet
@@ -209,6 +210,20 @@ abstract class BaseActivity<VB : ViewBinding>(
 
     open fun upBackgroundImage() {
         if (imageBg) {
+            val signature = ThemeConfig.getBackgroundSignature(this)
+            // 命中进程级缓存：同步应用，Activity 重建/返回主界面时无需重新解码，无闪烁
+            val cached = ThemeConfig.getCachedBgImage(signature)
+            if (cached != null) {
+                onBackgroundDrawableLoaded(cached)
+                return
+            }
+            // 未命中缓存：先用最近一次应用的背景图占位（如有），
+            // 避免异步解码期间先显示纯色底再跳变成背景图
+            var placeholderApplied = false
+            ThemeConfig.getLastBgImage(signature)?.let {
+                onBackgroundDrawableLoaded(it)
+                placeholderApplied = true
+            }
             val windowSize = windowManager.windowSize
             lifecycleScope.launch(Dispatchers.Default) {
                 val drawable = try {
@@ -222,10 +237,31 @@ abstract class BaseActivity<VB : ViewBinding>(
                 }
                 withContext(Dispatchers.Main) {
                     if (!isFinishing && !isDestroyed) {
-                        drawable?.let { window.decorView.background = it }
+                        if (drawable != null) {
+                            ThemeConfig.cacheBgImage(signature, drawable)
+                            onBackgroundDrawableLoaded(drawable)
+                        } else if (!placeholderApplied) {
+                            // 加载失败且无占位时才通知空背景（清除旧背景），
+                            // 有占位时保留占位图，避免闪回纯色
+                            onBackgroundDrawableLoaded(null)
+                        }
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * 背景图异步解码完成回调（主线程）。
+     *
+     * [drawable] 为 null 表示无背景图配置或加载失败。
+     * 子类若需要在背景就绪后做同步处理（如同步到其他 View），
+     * 必须覆写本方法而非在 [upBackgroundImage] 调用后同步取值——
+     * 解码是异步的，[upBackgroundImage] 返回时背景尚未生效。
+     */
+    protected open fun onBackgroundDrawableLoaded(drawable: Drawable?) {
+        if (drawable != null) {
+            window.decorView.background = drawable
         }
     }
 

@@ -3,6 +3,7 @@ package io.legado.app.data.repository
 import io.legado.app.data.dao.BookReadTime
 import io.legado.app.data.dao.DailyReadStat
 import io.legado.app.data.dao.ReadRecordDao
+import io.legado.app.data.dao.SessionIdentity
 import io.legado.app.data.entities.readRecord.ReadRecord
 import io.legado.app.data.entities.readRecord.ReadRecordDetail
 import io.legado.app.data.entities.readRecord.ReadRecordSession
@@ -191,11 +192,14 @@ class ReadRecordRepositoryTest {
 
         assertEquals(1, days.size)
         assertEquals(1, days[0].sessions.size)
-        assertEquals(1_000L, days[0].sessions[0].startTime)
-        assertEquals(60_000L, days[0].sessions[0].endTime)
-        assertEquals(170L, days[0].sessions[0].words)
+        assertEquals(1_000L, days[0].sessions[0].session.startTime)
+        assertEquals(60_000L, days[0].sessions[0].session.endTime)
+        assertEquals(170L, days[0].sessions[0].session.words)
         // 合并后的会话应显示最后读到的章节，而不是开始阅读的章节
-        assertEquals("第三章", days[0].sessions[0].durChapterTitle)
+        assertEquals("第三章", days[0].sessions[0].session.durChapterTitle)
+        // readTime 按未合并的原始会话求和（29s + 15s + 15s），行时长与日合计一致
+        assertEquals(59_000L, days[0].readTime)
+        assertEquals(59_000L, days[0].sessions[0].readTime)
     }
 
     @Test
@@ -216,6 +220,10 @@ class ReadRecordRepositoryTest {
 
         assertEquals(1, days.size)
         assertEquals(1, days[0].sessions.size)
+        // 日合计与行时长都必须用真实阅读时长（60s + 30s = 90s），
+        // 而非合并后时段的端点跨度（6 分钟间隙会被计入，虚高为 420s）
+        assertEquals(90_000L, days[0].readTime)
+        assertEquals(90_000L, days[0].sessions[0].readTime)
     }
 
     @Test
@@ -236,6 +244,10 @@ class ReadRecordRepositoryTest {
 
         assertEquals(1, days.size)
         assertEquals(2, days[0].sessions.size)
+        // 不合并时行时长即真实时长，行时长之和等于日合计（行按时间降序排列）
+        assertEquals(30_000L, days[0].sessions[0].readTime)
+        assertEquals(60_000L, days[0].sessions[1].readTime)
+        assertEquals(90_000L, days[0].readTime)
     }
 
     @Test
@@ -265,8 +277,56 @@ class ReadRecordRepositoryTest {
     }
 
     @Test
-    fun saveReadSessionIgnoresBlankBookName() = runBlocking {
+    fun compactSessionsMergesContiguousFragmentsAndKeepsTotalTime() = runBlocking {
         val dao = FakeReadRecordDao()
+        val repository = ReadRecordRepository(dao) { CURRENT_DEVICE_ID }
+        // 翻页碎片：首尾相接，应被压缩合并
+        dao.insertSession(
+            ReadRecordSession(deviceId = CURRENT_DEVICE_ID, bookName = "Compact Book", bookAuthor = "Author", startTime = 1_000L, endTime = 30_000L, words = 100L, durChapterTitle = "第一章")
+        )
+        dao.insertSession(
+            ReadRecordSession(deviceId = CURRENT_DEVICE_ID, bookName = "Compact Book", bookAuthor = "Author", startTime = 30_000L, endTime = 45_000L, words = 50L, durChapterTitle = "第二章")
+        )
+        dao.insertSession(
+            ReadRecordSession(deviceId = CURRENT_DEVICE_ID, bookName = "Compact Book", bookAuthor = "Author", startTime = 45_000L, endTime = 60_000L, words = 20L, durChapterTitle = "第三章")
+        )
+        // 与上一段间隔 10 分钟（> 0），属于独立阅读时段，不应被压缩合并
+        dao.insertSession(
+            ReadRecordSession(deviceId = CURRENT_DEVICE_ID, bookName = "Compact Book", bookAuthor = "Author", startTime = 60_000L + 10 * 60_000L, endTime = 60_000L + 10 * 60_000L + 30_000L, words = 0L, durChapterTitle = "第四章")
+        )
+
+        repository.compactSessions()
+
+        val remaining = dao.getSessionsByBook(CURRENT_DEVICE_ID, "Compact Book", "Author").sortedBy { it.startTime }
+        assertEquals(2, remaining.size)
+        assertEquals(1_000L, remaining[0].startTime)
+        assertEquals(60_000L, remaining[0].endTime)
+        assertEquals(170L, remaining[0].words)
+        assertEquals("第三章", remaining[0].durChapterTitle)
+        // 合并前后总时长不变（29s + 15s + 15s + 30s）
+        assertEquals(89_000L, remaining.sumOf { it.endTime - it.startTime })
+    }
+
+    @Test
+    fun compactSessionsDoesNotTouchOtherBooks() = runBlocking {
+        val dao = FakeReadRecordDao()
+        val repository = ReadRecordRepository(dao) { CURRENT_DEVICE_ID }
+        dao.insertSession(
+            ReadRecordSession(deviceId = CURRENT_DEVICE_ID, bookName = "Book A", bookAuthor = "Author", startTime = 1_000L, endTime = 30_000L)
+        )
+        dao.insertSession(
+            ReadRecordSession(deviceId = CURRENT_DEVICE_ID, bookName = "Book B", bookAuthor = "Author", startTime = 30_000L, endTime = 45_000L)
+        )
+
+        repository.compactSessions()
+
+        // 不同书籍之间即使时间上首尾相接也不能合并
+        assertEquals(1, dao.getSessionsByBook(CURRENT_DEVICE_ID, "Book A", "Author").size)
+        assertEquals(1, dao.getSessionsByBook(CURRENT_DEVICE_ID, "Book B", "Author").size)
+    }
+
+    @Test
+    fun saveReadSessionIgnoresBlankBookName() = runBlocking {        val dao = FakeReadRecordDao()
         val repository = ReadRecordRepository(dao) { CURRENT_DEVICE_ID }
 
         repository.saveReadSession(
@@ -641,6 +701,14 @@ class ReadRecordRepositoryTest {
             sessions.removeAll {
                 it.deviceId == deviceId && it.bookName == bookName && it.bookAuthor == bookAuthor
             }
+        }
+
+        override suspend fun getDistinctSessionIdentities(): List<SessionIdentity> {
+            return sessions.map { SessionIdentity(it.deviceId, it.bookName, it.bookAuthor) }.distinct()
+        }
+
+        override suspend fun deleteSessionsByIds(ids: List<Long>) {
+            sessions.removeAll { it.id in ids }
         }
 
         override suspend fun deleteSessionsByBookAndDate(

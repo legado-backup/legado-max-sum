@@ -85,11 +85,8 @@ import io.legado.app.utils.visible
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.DevicePerformanceUtils
 import io.legado.app.utils.dpToPx
-import io.legado.app.utils.externalFiles
-import io.legado.app.utils.FileUtils
 import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.getPrefInt
-import io.legado.app.utils.getPrefString
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -99,7 +96,6 @@ import kotlin.coroutines.resume
 import androidx.core.graphics.drawable.toDrawable
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.ui.about.UpdateDialog
-import java.io.File
 import io.legado.app.utils.StringUtils
 import io.legado.app.utils.clearClip
 import io.legado.app.utils.getClipText
@@ -159,7 +155,7 @@ class MainActivity :
     }
 
     /**
-     * 重写背景更新方法，在父类设置 decorView 背景后，将相同背景同步到 content_container。
+     * 重写背景更新方法，在父类异步加载完成背景后，将相同背景同步到 content_container。
      *
      * 原因：底栏的玻璃/磨砂效果（[StableLiquidGlassView]）通过 [LiquidGlass] 采样
      * content_container 的像素来实现实时模糊。而 [LiquidGlass] 的采样机制是调用
@@ -179,8 +175,9 @@ class MainActivity :
      * 应改为在此处合并而非覆盖，或改用其他容器作为采样源。
      *
      * 其他注意点：
-     * - imageBg 关闭时 decorView 背景为 null，此处会将 content_container 背景同步为 null，
-     *   即清除其背景，不会遗留旧的背景图。
+     * - 背景图解码在子线程异步执行，回调 [onBackgroundDrawableLoaded] 在主线程触发后
+     *   才同步 content_container；decode 失败或无背景图配置时 drawable 为 null，
+     *   会将 content_container 背景同步为 null（清除背景，不遗留旧背景图）。
      * - mutate() 仅克隆 Drawable 状态对象，底层像素（bitmap/constantState）仍与 decorView
      *   共享，不会因双份背景导致像素内存翻倍，仅额外占用一份轻量状态对象。
      */
@@ -192,44 +189,26 @@ class MainActivity :
             return
         }
         backgroundImageSignature = signature
+        // 注意：背景解码是异步的，super 返回时背景尚未生效，
+        // content_container 的同步统一在 onBackgroundDrawableLoaded 回调中完成
         super.upBackgroundImage()
-        // 将 decorView 的当前背景同步到 content_container
+    }
+
+    override fun onBackgroundDrawableLoaded(drawable: Drawable?) {
+        super.onBackgroundDrawableLoaded(drawable)
+        // 将加载完成的背景同步到 content_container
         // 使用 constantState?.newDrawable()?.mutate() 创建独立副本，
         // 避免两个 View 共享同一 Drawable 状态导致绘制冲突
-        val decorBg = window.decorView.background
         // 注意：此处会无条件覆盖 content_container 背景，详见上方约束说明
-        binding.contentContainer.background = decorBg?.constantState?.newDrawable()?.mutate()
+        binding.contentContainer.background = drawable?.constantState?.newDrawable()?.mutate()
         backgroundImageApplied = true
     }
 
     /**
-     * 计算当前主题背景的签名，取图逻辑与 [ThemeConfig.getBgImage] 保持一致。
-     * 纳入主题模式（日/夜）、背景路径、文件最后修改时间与大小、模糊强度，
-     * 任一变化都会使签名不同而触发重新解码。
+     * 计算当前主题背景的签名，统一委托 [ThemeConfig.getBackgroundSignature]，
+     * 与 BaseActivity 的进程级背景缓存使用同一口径。
      */
-    private fun currentBackgroundSignature(): String? {
-        val night = AppConfig.isNightTheme
-        val prefKey = if (night) PreferKey.bgImageN else PreferKey.bgImage
-        val rawPath = getPrefString(prefKey).orEmpty()
-        if (rawPath.isBlank()) return "bg:$prefKey:empty"
-        // 与 getBgImage 相同：在线背景需先落到缓存文件，仅文件名的需拼接完整路径
-        val path = if (rawPath.startsWith("http")) {
-            val filePath = FileUtils.getPath(externalFiles, prefKey, ThemeConfig.getUrlToFile(rawPath))
-            if (FileUtils.exist(filePath)) filePath else null
-        } else if (!rawPath.contains(File.separator)) {
-            val filePath = FileUtils.getPath(externalFiles, prefKey, rawPath)
-            if (FileUtils.exist(filePath)) filePath else null
-        } else {
-            rawPath
-        }
-        if (path == null) return "bg:$prefKey:missing:$rawPath"
-        val blurring = getPrefInt(
-            if (night) PreferKey.bgImageNBlurring else PreferKey.bgImageBlurring,
-            0,
-        )
-        val file = File(path)
-        return "bg:$prefKey:${file.absolutePath}:${file.lastModified()}:${file.length()}:$blurring"
-    }
+    private fun currentBackgroundSignature(): String = ThemeConfig.getBackgroundSignature(this)
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         // 清理已销毁 Fragment 的引用，避免 fragmentMap 持有导致内存泄漏

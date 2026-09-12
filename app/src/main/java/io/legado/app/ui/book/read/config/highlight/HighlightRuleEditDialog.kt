@@ -1,7 +1,12 @@
 package io.legado.app.ui.book.read.config.highlight
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PorterDuff
+import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
@@ -9,7 +14,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ArrayAdapter
+import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.TextView
 import androidx.annotation.ColorInt
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.viewModels
@@ -33,6 +40,7 @@ import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.font.FontSelectDialog
 import io.legado.app.utils.showDialogFragment
+import kotlin.math.roundToInt
 
 /**
  * 高亮规则单条编辑弹窗。
@@ -156,7 +164,7 @@ class HighlightRuleEditDialog @JvmOverloads constructor(
         binding.spBgImageFit.adapter = object : ArrayAdapter<String>(
             requireContext(),
             R.layout.item_text_common,
-            listOf("平铺", "拉伸填充", "居中裁剪"),
+            listOf("平铺", "拉伸填充", "居中裁剪", "九宫格"),
         ) {
             override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
                 val view = super.getView(position, convertView, parent)
@@ -299,6 +307,7 @@ class HighlightRuleEditDialog @JvmOverloads constructor(
         binding.tvPreview.setTextColor(primaryTextColor)
         binding.tvPatternError.setTextColor(requireContext().getColor(R.color.error))
         binding.tvBgImageScale.setTextColor(secondaryTextColor)
+        binding.tvNpAdjustAction.setTextColor(accentColor)
 
         binding.tvRegexToggle.setTextColor(primaryTextColor)
         binding.tvRegexToggle.background?.mutate()?.setTint(bg)
@@ -432,7 +441,8 @@ class HighlightRuleEditDialog @JvmOverloads constructor(
         }
         updateFontText()
         binding.etSampleText.setText(editingRule.sampleText.ifBlank { editingRule.normalizedSampleText() })
-        binding.spBgImageFit.setSelection(editingRule.bgImageFit.coerceIn(0, 2))
+        binding.spBgImageFit.setSelection(editingRule.bgImageFit.coerceIn(0, 3))
+        updateNpAdjustRow()
         binding.sbBgImageScale.progress = (editingRule.bgImageScale.coerceIn(0.1f, 5f) * 10).toInt()
         binding.tvBgImageScale.text = "${editingRule.bgImageScale.coerceIn(0.1f, 5f).formatScale()}x"
         binding.spUnderlineMode.setSelection(editingRule.underlineMode.coerceIn(0, 8))
@@ -556,6 +566,9 @@ class HighlightRuleEditDialog @JvmOverloads constructor(
         binding.tvBgImagePick.setOnClickListener {
             showBgImagePicker()
         }
+        binding.llNpAdjust.setOnClickListener {
+            showNineSliceAdjustDialog()
+        }
         binding.etFont.setOnClickListener {
             showDialogFragment<FontSelectDialog> {
                 putBoolean(FontSelectDialog.ARG_FOR_RULE, true)
@@ -575,6 +588,7 @@ class HighlightRuleEditDialog @JvmOverloads constructor(
                     id: Long,
                 ) {
                     editingRule.bgImageFit = position
+                    updateNpAdjustRow()
                     updatePreview()
                 }
 
@@ -767,11 +781,6 @@ class HighlightRuleEditDialog @JvmOverloads constructor(
         // 如果有背景图片，显示图片预览
         val bgImage = editingRule.bgImage.orEmpty()
         if (bgImage.isNotBlank()) {
-            // 点九图优先以 NinePatchDrawable 预览，保证拉伸效果与正文渲染一致
-            HighlightRuleBackgroundManager.getNinePatchDrawable(bgImage)?.let {
-                binding.viewBgImagePreview.background = it
-                return
-            }
             val bitmap = HighlightRuleBackgroundManager.getBitmap(bgImage)
             if (bitmap != null) {
                 val drawable = android.graphics.drawable.BitmapDrawable(resources, bitmap)
@@ -825,6 +834,188 @@ class HighlightRuleEditDialog @JvmOverloads constructor(
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    /** 九宫格调整入口行：仅在适配方式为九宫格且已设置背景图时显示 */
+    private fun updateNpAdjustRow() {
+        val isNineSlice = binding.spBgImageFit.selectedItemPosition == 3
+        val hasImage = editingRule.bgImage?.isNotBlank() == true
+        binding.llNpAdjust.visibility = if (isNineSlice && hasImage) View.VISIBLE else View.GONE
+        if (isNineSlice && hasImage) {
+            binding.tvNpSummary.text = formatNpSummary()
+        }
+    }
+
+    private fun formatNpSummary(): String {
+        fun Float.percent() = "${(this * 100).roundToInt()}%"
+        return "左${editingRule.npLeft.percent()} 上${editingRule.npTop.percent()} " +
+            "右${editingRule.npRight.percent()} 下${editingRule.npBottom.percent()}"
+    }
+
+    /**
+     * 九宫格调整弹窗：上方预览图叠加四条红色分割线，下方左/上/右/下四行滑条按百分比微调。
+     * 滑条组件样式与底栏透明度调整一致（−/+ 按钮夹住 SeekBar），比例含义与 MD3-main
+     * 的九宫格编辑器相同：分割线一侧为固定不拉伸的边框区。
+     * 左右两侧相加、上下两侧相加均不超过 100%，拖动超限时压回当前滑条自身。
+     */
+    private fun showNineSliceAdjustDialog() {
+        val bgImage = editingRule.bgImage?.takeIf { it.isNotBlank() } ?: return
+        val bitmap = HighlightRuleBackgroundManager.getBitmap(bgImage)
+        val density = resources.displayMetrics.density
+        var npLeft = editingRule.npLeft.coerceIn(0f, 1f)
+        var npTop = editingRule.npTop.coerceIn(0f, 1f)
+        var npRight = editingRule.npRight.coerceIn(0f, 1f)
+        var npBottom = editingRule.npBottom.coerceIn(0f, 1f)
+
+        val preview = NineSlicePreviewView(requireContext(), bitmap, npLeft, npTop, npRight, npBottom).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (200 * density).toInt(),
+            ).apply { bottomMargin = (8 * density).toInt() }
+        }
+
+        val container = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((24 * density).toInt(), (16 * density).toInt(), (24 * density).toInt(), 0)
+            addView(preview)
+        }
+
+        // 已创建的滑条按 key 记录，供对侧滑条查询上限（左右/上下两两联动）
+        val bars = HashMap<String, SeekBar>(4)
+        fun limitOf(oppositeKey: String): Int {
+            val opposite = bars[oppositeKey] ?: return 100
+            return 100 - opposite.progress
+        }
+
+        fun sliderRow(
+            label: String,
+            key: String,
+            oppositeKey: String,
+            initial: Float,
+            onValue: (Float) -> Unit,
+        ) {
+            val percentText = TextView(requireContext()).apply {
+                text = "${(initial * 100).roundToInt()}%"
+                textSize = 13f
+                setTextColor(primaryTextColor)
+            }
+            val seekBar = SeekBar(requireContext()).apply {
+                max = 100
+                progress = (initial * 100).roundToInt()
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { marginStart = (6 * density).toInt() }
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                        val limit = limitOf(oppositeKey)
+                        if (progress > limit) {
+                            // 压回后再次触发本回调（fromUser=false），在该分支完成刷新
+                            sb?.progress = limit
+                            return
+                        }
+                        onValue(progress / 100f)
+                        percentText.text = "$progress%"
+                        preview.invalidate()
+                    }
+                    override fun onStartTrackingTouch(sb: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(sb: SeekBar?) = Unit
+                })
+            }
+            bars[key] = seekBar
+            fun adjustButton(text: String, delta: Int) = TextView(requireContext()).apply {
+                this.text = text
+                textSize = 22f
+                gravity = Gravity.CENTER
+                setTextColor(primaryTextColor)
+                setPadding((14 * density).toInt(), 0, (14 * density).toInt(), 0)
+                setOnClickListener { seekBar.progress = (seekBar.progress + delta).coerceIn(0, limitOf(oppositeKey)) }
+            }
+            container.addView(LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
+                addView(TextView(requireContext()).apply {
+                    text = label
+                    textSize = 13f
+                    setTextColor(primaryTextColor)
+                })
+                addView(adjustButton("−", -1))
+                addView(seekBar)
+                addView(adjustButton("+", 1))
+                addView(percentText.apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).apply { width = (40 * density).toInt(); gravity = Gravity.CENTER }
+                })
+            })
+        }
+
+        sliderRow("左", "left", "right", npLeft) { npLeft = it; preview.npLeft = it }
+        sliderRow("右", "right", "left", npRight) { npRight = it; preview.npRight = it }
+        sliderRow("上", "top", "bottom", npTop) { npTop = it; preview.npTop = it }
+        sliderRow("下", "bottom", "top", npBottom) { npBottom = it; preview.npBottom = it }
+
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("九宫格调整")
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                editingRule.npLeft = npLeft
+                editingRule.npTop = npTop
+                editingRule.npRight = npRight
+                editingRule.npBottom = npBottom
+                updateNpAdjustRow()
+                updatePreview()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** 九宫格调整预览：居中显示背景图并叠加四条红色分割线，分割线随滑条实时移动 */
+    private class NineSlicePreviewView(
+        context: Context,
+        private val bitmap: Bitmap?,
+        npLeft: Float,
+        npTop: Float,
+        npRight: Float,
+        npBottom: Float,
+    ) : View(context) {
+
+        var npLeft = npLeft
+        var npTop = npTop
+        var npRight = npRight
+        var npBottom = npBottom
+
+        private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            isFilterBitmap = true
+        }
+        private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFE53935.toInt()
+            strokeWidth = 2f * resources.displayMetrics.density
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            canvas.drawColor(0x1F888888)
+            val bm = bitmap ?: return
+            val cw = width.toFloat()
+            val ch = height.toFloat()
+            val aspect = bm.width.toFloat() / bm.height
+            val (iw, ih, ox, oy) = if (aspect > cw / ch) {
+                val h = cw / aspect
+                listOf(cw, h, 0f, (ch - h) / 2f)
+            } else {
+                val w = ch * aspect
+                listOf(w, ch, (cw - w) / 2f, 0f)
+            }
+            canvas.drawBitmap(bm, null, RectF(ox, oy, ox + iw, oy + ih), bitmapPaint)
+            val leftX = ox + iw * npLeft
+            canvas.drawLine(leftX, oy, leftX, oy + ih, linePaint)
+            val rightX = ox + iw * (1f - npRight)
+            canvas.drawLine(rightX, oy, rightX, oy + ih, linePaint)
+            val topY = oy + ih * npTop
+            canvas.drawLine(ox, topY, ox + iw, topY, linePaint)
+            val bottomY = oy + ih * (1f - npBottom)
+            canvas.drawLine(ox, bottomY, ox + iw, bottomY, linePaint)
+        }
     }
 
     private fun saveRule() {

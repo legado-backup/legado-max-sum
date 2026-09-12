@@ -24,6 +24,11 @@ data class HighlightRule(
     var bgImage: String? = null,
     var bgImageFit: Int = 0,
     var bgImageScale: Float = 1f,
+    /** 九宫格分割比例（0-1，占图片宽/高的百分比；左右相加、上下相加不超过 1），适配方式为九宫格时生效 */
+    var npLeft: Float = 0.1f,
+    var npTop: Float = 0.1f,
+    var npRight: Float = 0.1f,
+    var npBottom: Float = 0.1f,
     /** 作用范围，书名或书源URL，分号分隔，为空则对所有书籍生效 */
     var scope: String? = null,
     /** 排除范围，书名或书源URL，分号分隔，匹配的书籍不应用该规则 */
@@ -75,6 +80,7 @@ data class HighlightRule(
                 when (bgImageFit) {
                     1 -> "背景图(拉伸)"
                     2 -> "背景图(裁剪)"
+                    3 -> "背景图(九宫格)"
                     else -> "背景图(平铺)"
                 },
             )

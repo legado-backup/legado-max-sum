@@ -15,8 +15,9 @@ import io.legado.app.utils.dpToPx
  * 背景图+下划线 Span，用于高亮规则匹配区域
  * @param textColor 文字颜色
  * @param bgImagePath 背景图路径
- * @param bgImageFit 背景图适配方式：0=平铺, 1=拉伸, 2=裁剪
+ * @param bgImageFit 背景图适配方式：0=平铺, 1=拉伸, 2=裁剪, 3=九宫格
  * @param bgImageScale 背景图缩放比例
+ * @param npLeft/npTop/npRight/npBottom 九宫格分割比例（0-1，左右相加、上下相加不超过 1），适配方式为九宫格时生效
  * @param underlineMode 下划线样式：0=无, 1=实线, 2=虚线, 3=波浪, 4=双线, 5=SVG, 6=删除线, 7=斜体, 8=方框
  * @param underlineColor 下划线颜色
  * @param underlineWidth 下划线粗细(dp)
@@ -28,6 +29,10 @@ class BgImageSpan(
     private val bgImagePath: String,
     private val bgImageFit: Int = 0,
     private val bgImageScale: Float = 1f,
+    private val npLeft: Float = 0.1f,
+    private val npTop: Float = 0.1f,
+    private val npRight: Float = 0.1f,
+    private val npBottom: Float = 0.1f,
     private val underlineMode: Int = 0,
     private val underlineColor: Int = 0,
     private val underlineWidth: Float = 1f,
@@ -71,60 +76,57 @@ class BgImageSpan(
         val rectHeight = (bottom - top).toFloat()
         val scale = bgImageScale.coerceIn(0.1f, 5f)
 
-        val ninePatch = TextLine.getBgNinePatchDrawable(bgImagePath)
-        if (ninePatch != null) {
-            // 点九图：九宫格拉伸并向外扩展内容区外的透明留白，使可见内容包裹文字
-            TextLine.drawBgNinePatch(
-                ninePatch, canvas, x.toInt(), top, (x + width).toInt(), bottom,
-                TextLine.getBgNinePatchInsets(bgImagePath)
-            )
-        } else {
-            val bitmap = TextLine.getBgBitmap(bgImagePath)
-            if (bitmap != null) {
-                val bgPaint = Paint().apply {
-                    style = Paint.Style.FILL
-                    isAntiAlias = true
-                    isFilterBitmap = true
+        val bitmap = TextLine.getBgBitmap(bgImagePath)
+        if (bitmap != null) {
+            val bgPaint = Paint().apply {
+                style = Paint.Style.FILL
+                isAntiAlias = true
+                isFilterBitmap = true
+            }
+            if (bgImageFit == 3) {
+                // 九宫格：与正文渲染一致，按用户分割比例切图并向外包裹文字区域
+                TextLine.drawNineSlice(
+                    bitmap, canvas, x, top.toFloat(), x + width, bottom.toFloat(),
+                    npLeft, npTop, npRight, npBottom,
+                )
+            } else when (bgImageFit) {
+                1 -> {
+                    val sw = rectWidth * scale
+                    val sh = rectHeight * scale
+                    val dx = x + (rectWidth - sw) / 2f
+                    val dy = top + (rectHeight - sh) / 2f
+                    canvas.save()
+                    canvas.clipRect(x, top.toFloat(), x + width, bottom.toFloat())
+                    canvas.drawBitmap(bitmap, null, RectF(dx, dy, dx + sw, dy + sh), bgPaint)
+                    canvas.restore()
                 }
-                when (bgImageFit) {
-                    1 -> {
-                        val sw = rectWidth * scale
-                        val sh = rectHeight * scale
-                        val dx = x + (rectWidth - sw) / 2f
-                        val dy = top + (rectHeight - sh) / 2f
-                        canvas.save()
-                        canvas.clipRect(x, top.toFloat(), x + width, bottom.toFloat())
-                        canvas.drawBitmap(bitmap, null, RectF(dx, dy, dx + sw, dy + sh), bgPaint)
-                        canvas.restore()
+                2 -> {
+                    val bw = bitmap.width.toFloat()
+                    val bh = bitmap.height.toFloat()
+                    val fitScale = (rectWidth / bw).coerceAtLeast(rectHeight / bh) * scale
+                    val scaledW = bw * fitScale
+                    val scaledH = bh * fitScale
+                    val dx = x + (rectWidth - scaledW) / 2f
+                    val dy = top + (rectHeight - scaledH) / 2f
+                    canvas.save()
+                    canvas.clipRect(x, top.toFloat(), x + width, bottom.toFloat())
+                    canvas.drawBitmap(bitmap, null, RectF(dx, dy, dx + scaledW, dy + scaledH), bgPaint)
+                    canvas.restore()
+                }
+                else -> {
+                    val tileBitmap = if (scale != 1f) {
+                        val sw = (bitmap.width * scale).toInt().coerceAtLeast(1)
+                        val sh = (bitmap.height * scale).toInt().coerceAtLeast(1)
+                        Bitmap.createScaledBitmap(bitmap, sw, sh, true)
+                    } else {
+                        bitmap
                     }
-                    2 -> {
-                        val bw = bitmap.width.toFloat()
-                        val bh = bitmap.height.toFloat()
-                        val fitScale = (rectWidth / bw).coerceAtLeast(rectHeight / bh) * scale
-                        val scaledW = bw * fitScale
-                        val scaledH = bh * fitScale
-                        val dx = x + (rectWidth - scaledW) / 2f
-                        val dy = top + (rectHeight - scaledH) / 2f
-                        canvas.save()
-                        canvas.clipRect(x, top.toFloat(), x + width, bottom.toFloat())
-                        canvas.drawBitmap(bitmap, null, RectF(dx, dy, dx + scaledW, dy + scaledH), bgPaint)
-                        canvas.restore()
-                    }
-                    else -> {
-                        val tileBitmap = if (scale != 1f) {
-                            val sw = (bitmap.width * scale).toInt().coerceAtLeast(1)
-                            val sh = (bitmap.height * scale).toInt().coerceAtLeast(1)
-                            Bitmap.createScaledBitmap(bitmap, sw, sh, true)
-                        } else {
-                            bitmap
-                        }
-                        val shader = BitmapShader(tileBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
-                        val matrix = Matrix()
-                        matrix.setTranslate(x, top.toFloat())
-                        shader.setLocalMatrix(matrix)
-                        bgPaint.shader = shader
-                        canvas.drawRect(x, top.toFloat(), x + width, bottom.toFloat(), bgPaint)
-                    }
+                    val shader = BitmapShader(tileBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+                    val matrix = Matrix()
+                    matrix.setTranslate(x, top.toFloat())
+                    shader.setLocalMatrix(matrix)
+                    bgPaint.shader = shader
+                    canvas.drawRect(x, top.toFloat(), x + width, bottom.toFloat(), bgPaint)
                 }
             }
         }

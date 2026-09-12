@@ -8,7 +8,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
-import android.graphics.drawable.NinePatchDrawable
 import android.os.Build
 import androidx.annotation.Keep
 import io.legado.app.help.PaintPool
@@ -27,6 +26,7 @@ import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
 import io.legado.app.utils.canvasrecorder.recordIfNeededThenDraw
 import io.legado.app.utils.dpToPx
 import splitties.init.appCtx
+import kotlin.math.roundToInt
 
 /**
  * 行信息
@@ -434,15 +434,38 @@ data class TextLine(
         var currentBgImage = ""
         var currentBgImageFit = 0
         var currentBgImageScale = 1f
+        var currentNpLeft = 0.1f
+        var currentNpTop = 0.1f
+        var currentNpRight = 0.1f
+        var currentNpBottom = 0.1f
         var active = false
+        fun sameStyle(
+            bgImage: String,
+            bgImageFit: Int,
+            bgImageScale: Float,
+            npLeft: Float,
+            npTop: Float,
+            npRight: Float,
+            npBottom: Float,
+        ) = bgImage == currentBgImage && bgImageFit == currentBgImageFit &&
+            bgImageScale == currentBgImageScale && npLeft == currentNpLeft &&
+            npTop == currentNpTop && npRight == currentNpRight && npBottom == currentNpBottom
         columns.forEachIndexed { index, column ->
             val textColumn = column as? TextBaseColumn
             val bgImage = textColumn?.bgImage ?: ""
             val bgImageFit = textColumn?.bgImageFit ?: 0
             val bgImageScale = textColumn?.bgImageScale ?: 1f
+            val npLeft = textColumn?.npLeft ?: 0.1f
+            val npTop = textColumn?.npTop ?: 0.1f
+            val npRight = textColumn?.npRight ?: 0.1f
+            val npBottom = textColumn?.npBottom ?: 0.1f
             when {
                 bgImage.isEmpty() && active -> {
-                    drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale)
+                    drawBgImageSegment(
+                        canvas, rangeStart, rangeEnd, currentBgImage,
+                        currentBgImageFit, currentBgImageScale,
+                        currentNpLeft, currentNpTop, currentNpRight, currentNpBottom,
+                    )
                     active = false
                 }
                 bgImage.isNotEmpty() && !active -> {
@@ -451,22 +474,38 @@ data class TextLine(
                     currentBgImage = bgImage
                     currentBgImageFit = bgImageFit
                     currentBgImageScale = bgImageScale
+                    currentNpLeft = npLeft
+                    currentNpTop = npTop
+                    currentNpRight = npRight
+                    currentNpBottom = npBottom
                     active = true
                 }
-                bgImage.isNotEmpty() && bgImage == currentBgImage && bgImageFit == currentBgImageFit && bgImageScale == currentBgImageScale -> {
+                bgImage.isNotEmpty() && sameStyle(bgImage, bgImageFit, bgImageScale, npLeft, npTop, npRight, npBottom) -> {
                     rangeEnd = textColumn!!.end
                 }
                 bgImage.isNotEmpty() -> {
-                    drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale)
+                    drawBgImageSegment(
+                        canvas, rangeStart, rangeEnd, currentBgImage,
+                        currentBgImageFit, currentBgImageScale,
+                        currentNpLeft, currentNpTop, currentNpRight, currentNpBottom,
+                    )
                     rangeStart = textColumn!!.start
                     rangeEnd = textColumn.end
                     currentBgImage = bgImage
                     currentBgImageFit = bgImageFit
                     currentBgImageScale = bgImageScale
+                    currentNpLeft = npLeft
+                    currentNpTop = npTop
+                    currentNpRight = npRight
+                    currentNpBottom = npBottom
                 }
             }
             if (active && index == columns.lastIndex) {
-                drawBgImageSegment(canvas, rangeStart, rangeEnd, currentBgImage, currentBgImageFit, currentBgImageScale)
+                drawBgImageSegment(
+                    canvas, rangeStart, rangeEnd, currentBgImage,
+                    currentBgImageFit, currentBgImageScale,
+                    currentNpLeft, currentNpTop, currentNpRight, currentNpBottom,
+                )
             }
         }
     }
@@ -672,19 +711,22 @@ data class TextLine(
         bgImage: String,
         bgImageFit: Int,
         bgImageScale: Float,
+        npLeft: Float,
+        npTop: Float,
+        npRight: Float,
+        npBottom: Float,
     ) {
         val top = bgPaddingTop
         val bottom = height - bgPaddingBottom
-        // 点九图优先：九宫格拉伸铺满匹配区域，平铺/裁剪等 bitmap 适配方式不适用
-        getBgNinePatchDrawable(bgImage)?.let { drawable ->
-            drawBgNinePatch(
-                drawable, canvas,
-                startX.toInt(), top.toInt(), endX.toInt(), bottom.toInt(),
-                getBgNinePatchInsets(bgImage)
+        val bitmap = getBgBitmap(bgImage) ?: return
+        if (bgImageFit == 3) {
+            // 九宫格：按用户调整的分割比例切图拉伸，可见边框向外包裹匹配区域
+            drawNineSlice(
+                bitmap, canvas, startX, top, endX, bottom,
+                npLeft, npTop, npRight, npBottom,
             )
             return
         }
-        val bitmap = getBgBitmap(bgImage) ?: return
         val paint = PaintPool.obtain()
         paint.style = android.graphics.Paint.Style.FILL
         paint.isAntiAlias = true
@@ -777,23 +819,6 @@ data class TextLine(
         private val einkUnderlineWidth = 1.dpToPx().toFloat()
         private val bgBitmapCache = android.util.LruCache<String, Bitmap>(16 * 1024 * 1024)
         private val bgScaledBitmapCache = android.util.LruCache<String, Bitmap>(8 * 1024 * 1024)
-        /** 点九图探测的尺寸上限：超过此尺寸的图不按点九图处理，避免主线程无采样全量解码 */
-        private const val NINE_PATCH_MAX_DIM = 1024
-        /** 内容区检测的 alpha 阈值，低于该值视为透明留白 */
-        private const val CONTENT_ALPHA_THRESHOLD = 16
-        /** 点九图包裹文字时内容区之外再向外延伸的余量（dp） */
-        private const val NINE_PATCH_WRAP_EXTRA_DP = 2
-        /** 点九图缓存：点九图不能按普通 bitmap 采样缩放，需整图解码后按九宫格拉伸；按字节数限额防止大图占满内存 */
-        private val bgNinePatchCache = object : android.util.LruCache<String, NinePatchDrawable>(8 * 1024 * 1024) {
-            override fun sizeOf(key: String, value: NinePatchDrawable): Int =
-                value.intrinsicWidth.coerceAtLeast(1) * value.intrinsicHeight.coerceAtLeast(1) * 4
-        }
-        /** 已确认不是点九图的路径，避免每次绘制重复解码探测 */
-        private val bgNotNinePatchPaths = java.util.Collections.newSetFromMap(
-            java.util.concurrent.ConcurrentHashMap<String, Boolean>()
-        )
-        /** 点九图内容区（非透明像素）外的透明留白缓存，绘制时据此向外扩展 bounds */
-        private val bgNinePatchInsets = java.util.concurrent.ConcurrentHashMap<String, android.graphics.Rect>()
         private val bgSampleWidth by lazy {
             appCtx.resources.displayMetrics.widthPixels
         }
@@ -810,117 +835,76 @@ data class TextLine(
         }
 
         /**
-         * 获取点九图（.9.png）背景的 NinePatchDrawable。
-         * 探测依据是 PNG 内嵌的九宫格 chunk（BitmapFactory 解码后 ninePatchChunk 非空），
-         * 与文件名无关，迁移/重命名后的内部文件同样可识别。
+         * 手动九宫格绘制：按 [npLeft]/[npTop]/[npRight]/[npBottom]（占位图宽高比例，0-1，
+         * 左右相加、上下相加不超过 1）把位图切成 3×3，四个角保持原始尺寸画在
+         * [left, top, right, bottom] 匹配区域外四角，四条边与中心分别拉伸，
+         * 可见边框向外包裹匹配区域。
+         * 匹配区域放不下两侧边框时按比例收缩，避免短匹配时绘制区域失控。
          */
-        fun getBgNinePatchDrawable(path: String): NinePatchDrawable? {
-            if (path.isBlank() || bgNotNinePatchPaths.contains(path)) return null
-            bgNinePatchCache.get(path)?.let { return it }
-            // loadBgNinePatch 仅在"确认非点九图"时写入否定缓存；IO/解码失败不缓存，文件恢复后仍可重试
-            return loadBgNinePatch(path)?.also { bgNinePatchCache.put(path, it) }
-        }
-
-        /**
-         * 获取点九图内容区（非透明像素）外的透明留白，单位为图片原始像素。
-         * 不依赖 .9 的 padding 指南（很多 .9 的留白并不在 padding 指南范围内），
-         * 而是加载时扫描非透明像素的实际包围盒得到。
-         */
-        fun getBgNinePatchInsets(path: String): android.graphics.Rect {
-            return bgNinePatchInsets[path] ?: android.graphics.Rect()
-        }
-
-        /**
-         * 点九图按"包裹内容"方式绘制：bounds 向外扩展内容区外的透明留白，
-         * 再额外外延 [NINE_PATCH_WRAP_EXTRA_DP]dp，使可见内容（气泡/边框）完全包裹住文字
-         * 并留有少量余量，与主题背景图把 .9 作为 View background 的观感一致。
-         * 每侧总扩展量不超过目标区域尺寸的 1/3，避免异常留白导致绘制区域失控。
-         */
-        fun drawBgNinePatch(
-            drawable: NinePatchDrawable,
+        fun drawNineSlice(
+            bitmap: Bitmap,
             canvas: Canvas,
-            left: Int,
-            top: Int,
-            right: Int,
-            bottom: Int,
-            insets: android.graphics.Rect,
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            npLeft: Float,
+            npTop: Float,
+            npRight: Float,
+            npBottom: Float,
         ) {
-            val maxHorizontal = (right - left) / 3
-            val maxVertical = (bottom - top) / 3
-            val extra = NINE_PATCH_WRAP_EXTRA_DP.dpToPx()
-            drawable.setBounds(
-                left - insets.left.coerceAtMost(maxHorizontal - extra).coerceAtLeast(0) - extra,
-                top - insets.top.coerceAtMost(maxVertical - extra).coerceAtLeast(0) - extra,
-                right + insets.right.coerceAtMost(maxHorizontal - extra).coerceAtLeast(0) + extra,
-                bottom + insets.bottom.coerceAtMost(maxVertical - extra).coerceAtLeast(0) + extra,
-            )
-            drawable.draw(canvas)
-        }
-
-        private fun loadBgNinePatch(path: String): NinePatchDrawable? {
-            return try {
-                val input = openBgImageStream(path) ?: return null
-                input.use { stream ->
-                    val buffered = if (stream.markSupported()) stream else java.io.BufferedInputStream(stream)
-                    // 先只读尺寸：点九图背景通常很小，超大图不做无采样的全量解码，
-                    // 避免首次绘制时在主线程瞬时分配数十 MB 位图
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    buffered.mark(buffered.available())
-                    BitmapFactory.decodeStream(buffered, null, bounds)
-                    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-                    if (bounds.outWidth > NINE_PATCH_MAX_DIM || bounds.outHeight > NINE_PATCH_MAX_DIM) {
-                        bgNotNinePatchPaths.add(path)
-                        return null
+            val bw = bitmap.width
+            val bh = bitmap.height
+            if (bw <= 0 || bh <= 0) return
+            // 切割点先按 0-1 换算，交叉（比例之和超 1 的异常数据）时压回保证三段单调
+            val rightCutX = bw - (bw * npRight.coerceIn(0f, 1f)).roundToInt()
+            val leftCutX = (bw * npLeft.coerceIn(0f, 1f)).roundToInt().coerceAtMost(rightCutX)
+            val rightCutY = bh - (bh * npBottom.coerceIn(0f, 1f)).roundToInt()
+            val leftCutY = (bh * npTop.coerceIn(0f, 1f)).roundToInt().coerceAtMost(rightCutY)
+            val srcX = intArrayOf(0, leftCutX, rightCutX, bw)
+            val srcY = intArrayOf(0, leftCutY, rightCutY, bh)
+            var leftW = srcX[1].toFloat()
+            var rightW = (bw - srcX[2]).toFloat()
+            var topH = srcY[1].toFloat()
+            var bottomH = (bh - srcY[2]).toFloat()
+            val matchW = right - left
+            val matchH = bottom - top
+            val horizontalFixed = leftW + rightW
+            if (horizontalFixed > matchW && horizontalFixed > 0f) {
+                val ratio = matchW / horizontalFixed
+                leftW *= ratio
+                rightW *= ratio
+            }
+            val verticalFixed = topH + bottomH
+            if (verticalFixed > matchH && verticalFixed > 0f) {
+                val ratio = matchH / verticalFixed
+                topH *= ratio
+                bottomH *= ratio
+            }
+            val dstX = floatArrayOf(left - leftW, left, right, right + rightW)
+            val dstY = floatArrayOf(top - topH, top, bottom, bottom + bottomH)
+            val paint = PaintPool.obtain()
+            paint.style = android.graphics.Paint.Style.FILL
+            paint.isAntiAlias = true
+            paint.isFilterBitmap = true
+            for (row in 0..2) {
+                for (col in 0..2) {
+                    if (srcX[col] == srcX[col + 1] ||
+                        srcY[row] == srcY[row + 1] ||
+                        dstX[col] == dstX[col + 1] ||
+                        dstY[row] == dstY[row + 1]
+                    ) {
+                        continue
                     }
-                    buffered.reset()
-                    // 点九图不能带 inSampleSize 采样，否则拉伸区域度量失真
-                    val options = BitmapFactory.Options().apply { inScaled = false }
-                    val bitmap = BitmapFactory.decodeStream(buffered, null, options) ?: return null
-                    if (bitmap.ninePatchChunk == null) {
-                        bitmap.recycle()
-                        bgNotNinePatchPaths.add(path)
-                        return null
-                    }
-                    bgNinePatchInsets[path] = computeContentInsets(bitmap)
-                    NinePatchDrawable(appCtx.resources, android.graphics.NinePatch(bitmap, bitmap.ninePatchChunk, path))
+                    canvas.drawBitmap(
+                        bitmap,
+                        android.graphics.Rect(srcX[col], srcY[row], srcX[col + 1], srcY[row + 1]),
+                        android.graphics.RectF(dstX[col], dstY[row], dstX[col + 1], dstY[row + 1]),
+                        paint,
+                    )
                 }
-            } catch (e: Exception) {
-                null
             }
-        }
-
-        /**
-         * 扫描非透明像素的实际包围盒，返回内容区距四边的留白（原始像素）。
-         * 仅在点九图加载时执行一次并缓存。
-         */
-        private fun computeContentInsets(bitmap: Bitmap): android.graphics.Rect {
-            val w = bitmap.width
-            val h = bitmap.height
-            if (w <= 0 || h <= 0) return android.graphics.Rect()
-            val pixels = IntArray(w * h)
-            bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
-            fun rowHasContent(y: Int): Boolean {
-                val rowStart = y * w
-                for (x in 0 until w) {
-                    if (pixels[rowStart + x] ushr 24 > CONTENT_ALPHA_THRESHOLD) return true
-                }
-                return false
-            }
-            fun colHasContent(x: Int): Boolean {
-                for (y in 0 until h) {
-                    if (pixels[y * w + x] ushr 24 > CONTENT_ALPHA_THRESHOLD) return true
-                }
-                return false
-            }
-            var top = 0
-            var bottom = h - 1
-            var left = 0
-            var right = w - 1
-            while (top < bottom && !rowHasContent(top)) top++
-            while (bottom > top && !rowHasContent(bottom)) bottom--
-            while (left < right && !colHasContent(left)) left++
-            while (right > left && !colHasContent(right)) right--
-            return android.graphics.Rect(left, top, w - 1 - right, h - 1 - bottom)
+            PaintPool.recycle(paint)
         }
 
         private fun openBgImageStream(path: String): java.io.InputStream? = try {
@@ -1019,9 +1003,6 @@ data class TextLine(
         fun clearBgBitmapCache() {
             bgBitmapCache.evictAll()
             bgScaledBitmapCache.evictAll()
-            bgNinePatchCache.evictAll()
-            bgNotNinePatchPaths.clear()
-            bgNinePatchInsets.clear()
         }
 
         fun copyBgImageToInternal(context: android.content.Context, sourcePath: String): String? {

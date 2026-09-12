@@ -17,6 +17,11 @@ data class HighlightRuleStyle(
     val bgImage: String,
     val bgImageFit: Int,
     val bgImageScale: Float,
+    /** 九宫格分割比例，适配方式为九宫格(bgImageFit=3)时生效 */
+    val npLeft: Float = 0.1f,
+    val npTop: Float = 0.1f,
+    val npRight: Float = 0.1f,
+    val npBottom: Float = 0.1f,
     /** 高亮字体路径，空串表示跟随阅读字体 */
     val font: String = "",
 ) {
@@ -42,6 +47,10 @@ data class HighlightRuleStyle(
             bgImage = rule.bgImage.orEmpty(),
             bgImageFit = rule.bgImageFit,
             bgImageScale = rule.bgImageScale,
+            npLeft = rule.npLeft,
+            npTop = rule.npTop,
+            npRight = rule.npRight,
+            npBottom = rule.npBottom,
             font = rule.font.orEmpty(),
         )
     }

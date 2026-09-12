@@ -1015,6 +1015,10 @@ class TextChapterLayout(
                 val bgImage = highlightStyle?.bgImage ?: ""
                 val bgImageFit = highlightStyle?.bgImageFit ?: 0
                 val bgImageScale = highlightStyle?.bgImageScale ?: 1f
+                val npLeft = highlightStyle?.npLeft ?: 0.1f
+                val npTop = highlightStyle?.npTop ?: 0.1f
+                val npRight = highlightStyle?.npRight ?: 0.1f
+                val npBottom = highlightStyle?.npBottom ?: 0.1f
                 val highlightFontPath = extractFontPath(spanned, charIndex)
                 val charRight = if (charIndex + 1 < lineEnd) {
                     staticLayout.getPrimaryHorizontal(charIndex + 1)
@@ -1149,6 +1153,10 @@ class TextChapterLayout(
                                 bgImage = bgImage,
                                 bgImageFit = bgImageFit,
                                 bgImageScale = bgImageScale,
+                                npLeft = npLeft,
+                                npTop = npTop,
+                                npRight = npRight,
+                                npBottom = npBottom,
                                 fontPath = highlightFontPath,
                             ),
                         )
@@ -1170,6 +1178,10 @@ class TextChapterLayout(
                             bgImage = bgImage,
                             bgImageFit = bgImageFit,
                             bgImageScale = bgImageScale,
+                            npLeft = npLeft,
+                            npTop = npTop,
+                            npRight = npRight,
+                            npBottom = npBottom,
                             fontPath = highlightFontPath,
                         ),
                     )
@@ -1374,6 +1386,10 @@ class TextChapterLayout(
         var bgImage = ""
         var bgImageFit = 0
         var bgImageScale = 1f
+        var npLeft = 0.1f
+        var npTop = 0.1f
+        var npRight = 0.1f
+        var npBottom = 0.1f
         var hasUnderline = false
         var hasBgImage = false
         var hasBgColor = false
@@ -1390,6 +1406,10 @@ class TextChapterLayout(
                 bgImage = span.bgImage
                 bgImageFit = span.bgImageFit
                 bgImageScale = span.bgImageScale
+                npLeft = span.npLeft
+                npTop = span.npTop
+                npRight = span.npRight
+                npBottom = span.npBottom
                 hasBgImage = true
             }
             if (span.bgColor != null) {
@@ -1408,6 +1428,10 @@ class TextChapterLayout(
             bgImage = if (hasBgImage) bgImage else "",
             bgImageFit = if (hasBgImage) bgImageFit else 0,
             bgImageScale = if (hasBgImage) bgImageScale else 1f,
+            npLeft = if (hasBgImage) npLeft else 0.1f,
+            npTop = if (hasBgImage) npTop else 0.1f,
+            npRight = if (hasBgImage) npRight else 0.1f,
+            npBottom = if (hasBgImage) npBottom else 0.1f,
         )
     }
 
@@ -1913,6 +1937,10 @@ class TextChapterLayout(
         val bgImage = style?.bgImage ?: ""
         val bgImageFit = style?.bgImageFit ?: 0
         val bgImageScale = style?.bgImageScale ?: 1f
+        val npLeft = style?.npLeft ?: 0.1f
+        val npTop = style?.npTop ?: 0.1f
+        val npRight = style?.npRight ?: 0.1f
+        val npBottom = style?.npBottom ?: 0.1f
         val fontPath = style?.font.orEmpty()
         val column = when {
             !srcList.isNullOrEmpty() && (char == srcReplaceStr || char == reviewStr) -> {
@@ -1954,6 +1982,10 @@ class TextChapterLayout(
                     bgImage = bgImage,
                     bgImageFit = bgImageFit,
                     bgImageScale = bgImageScale,
+                    npLeft = npLeft,
+                    npTop = npTop,
+                    npRight = npRight,
+                    npBottom = npBottom,
                     fontPath = fontPath,
                 )
             }
@@ -2076,6 +2108,10 @@ class TextChapterLayout(
                 bgImage = style.bgImage,
                 bgImageFit = style.bgImageFit,
                 bgImageScale = style.bgImageScale,
+                npLeft = style.npLeft,
+                npTop = style.npTop,
+                npRight = style.npRight,
+                npBottom = style.npBottom,
                 font = style.font,
             )
         }

@@ -23,6 +23,9 @@ object HighlightRuleStore {
     const val backupFileName = "highlightRule.json"
     const val backupBgDirName = "highlightRuleBg"
 
+    /** 九宫格分割比例的默认值，与实体字段默认值保持一致 */
+    const val DEFAULT_NP_RATIO = 0.1f
+
     /**
      * 高亮规则备份文件的完整数据结构。
      */
@@ -106,6 +109,11 @@ object HighlightRuleStore {
         // GSON 用 Unsafe 实例化 data class 时不调用构造函数，
         // 老规则 JSON 缺失 themeScope 字段时反序列化得到 0，应视为全部生效而非 coerceIn(1,3)=1（仅亮色）
         themeScope = if (rule.themeScope in 1..3) rule.themeScope else HighlightRule.THEME_ALL,
+        // 九宫格分割比例只在 0-1 内有意义，越界视为未设置过该字段，回落到默认比例
+        npLeft = rule.npLeft.takeIf { it in 0f..1f } ?: DEFAULT_NP_RATIO,
+        npTop = rule.npTop.takeIf { it in 0f..1f } ?: DEFAULT_NP_RATIO,
+        npRight = rule.npRight.takeIf { it in 0f..1f } ?: DEFAULT_NP_RATIO,
+        npBottom = rule.npBottom.takeIf { it in 0f..1f } ?: DEFAULT_NP_RATIO,
     )
 
     fun backupData(context: Context): BackupData {

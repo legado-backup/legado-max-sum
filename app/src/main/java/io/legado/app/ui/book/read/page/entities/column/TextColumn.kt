@@ -28,6 +28,10 @@ data class TextColumn(
     override val bgImage: String = "",
     override val bgImageFit: Int = 0,
     override val bgImageScale: Float = 1f,
+    override val npLeft: Float = 0.1f,
+    override val npTop: Float = 0.1f,
+    override val npRight: Float = 0.1f,
+    override val npBottom: Float = 0.1f,
     override val fontPath: String = "",
 ) : TextBaseColumn {
 

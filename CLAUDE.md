@@ -98,7 +98,7 @@ Compose 规范拆分为 8 个文件，位于 `docs/project-rules/compose/`（目
 
 - Kotlin 代码风格遵循 Google Android Style Guide
 - 命名规则：Activity `XxxActivity`、ViewModel `XxxViewModel`、Fragment `XxxFragment`
-- 日志 tag 统一 `AppTag.<类名>` 格式（如 `private const val TAG = "AppTag.BookInfo"`），**新代码强制**；存量已有的 TAG 常量不要求回改
+- 日志 tag 统一 `AppTag.<类名>` 格式（如 `private const val TAG = "AppTag.BookInfo"`），**新代码强制**；存量已有的 TAG 常量不要求回改。此规则为**前瞻目标态**（全库尚无实例），暂不追溯存量
 
 ## Comments
 
